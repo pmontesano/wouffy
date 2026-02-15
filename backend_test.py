@@ -138,7 +138,7 @@ print('Test data cleaned up');
         if success and user_data:
             print(f"   User data: {json.dumps(user_data, indent=2)[:200]}...")
         
-        # Test role update (set to OWNER first)
+        # Test role update (set to OWNER first) - fix request format
         success, _ = self.run_test(
             "Update user role to OWNER",
             "PATCH", 
