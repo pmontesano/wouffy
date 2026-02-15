@@ -1,0 +1,156 @@
+{
+  "identity": {
+    "name": "Wouffy",
+    "tone": "Joyful, Trustworthy, Professional, Organic",
+    "core_philosophy": "Uber for Pets meets Airbnb warmth. Convenience without the coldness.",
+    "anti_patterns": [
+      "No sharp, corporate edges (0px radius).",
+      "No generic 'tech blue' or 'saas purple'.",
+      "No 'Inter' for headings.",
+      "No dense data tables without breathing room.",
+      "No pure black (#000000) text."
+    ]
+  },
+  "typography": {
+    "headings": {
+      "family": "Outfit, Manrope, sans-serif",
+      "weights": ["600", "700"],
+      "tracking": "tight",
+      "usage": "Use for all H1-H3. Expressive, friendly, geometric but soft."
+    },
+    "body": {
+      "family": "Plus Jakarta Sans, Inter, sans-serif",
+      "weights": ["400", "500"],
+      "relaxed_line_height": "1.6",
+      "usage": "High legibility for functional text."
+    },
+    "installation": "Add to index.html or import in CSS: @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;700&family=Plus+Jakarta+Sans:wght@400;500;600&display=swap');"
+  },
+  "colors": {
+    "primary": {
+      "name": "Mint Leaf",
+      "hex": "#88D8B0",
+      "tailwind": "bg-[#88D8B0]",
+      "usage": "Primary actions, brand recognition, success states."
+    },
+    "secondary": {
+      "name": "Soft Peach",
+      "hex": "#FFCC99",
+      "tailwind": "bg-[#FFCC99]",
+      "usage": "Accents, highlights, 'Book Now' buttons for urgency without alarm."
+    },
+    "background": {
+      "main": "#FFFFFF",
+      "off_white": "#F9FAFB",
+      "usage": "Mainly white. Use off-white for section banding."
+    },
+    "text": {
+      "primary": "#1F2937",
+      "secondary": "#4B5563",
+      "muted": "#9CA3AF"
+    },
+    "status": {
+      "success": "#10B981",
+      "error": "#EF4444",
+      "warning": "#F59E0B"
+    }
+  },
+  "visual_enhancers": {
+    "radius": {
+      "default": "rounded-2xl",
+      "buttons": "rounded-full",
+      "cards": "rounded-3xl"
+    },
+    "shadows": {
+      "card": "shadow-[0_8px_30px_rgb(0,0,0,0.04)]",
+      "hover": "shadow-[0_8px_30px_rgb(0,0,0,0.08)]",
+      "button": "shadow-[0_4px_14px_0_rgba(136,216,176,0.39)]"
+    },
+    "glass": {
+      "class": "backdrop-blur-xl bg-white/70 border border-white/20 shadow-sm",
+      "usage": "Sticky headers, floating navigation, map overlays."
+    }
+  },
+  "components": {
+    "Button": {
+      "style": "Pill-shaped, generous padding (py-3 px-8).",
+      "interaction": "Hover: scale-105 transition-transform duration-200. Active: scale-95.",
+      "variants": {
+        "primary": "bg-[#88D8B0] text-white hover:bg-[#6FCF9F]",
+        "secondary": "bg-[#FFCC99] text-[#5A3A20] hover:bg-[#FFBF80]",
+        "outline": "border-2 border-[#88D8B0] text-[#88D8B0] hover:bg-[#88D8B0] hover:text-white"
+      }
+    },
+    "Card": {
+      "style": "bg-white rounded-3xl p-6 shadow-card hover:shadow-hover transition-shadow duration-300 border border-gray-100",
+      "usage": "Walker profiles, Service details, Reviews."
+    },
+    "Input": {
+      "style": "bg-gray-50 border-transparent focus:border-[#88D8B0] focus:ring-2 focus:ring-[#88D8B0]/20 rounded-xl px-4 py-3",
+      "label_style": "text-sm font-semibold text-gray-700 mb-2 block"
+    }
+  },
+  "layout_strategies": {
+    "marketing_hero": {
+      "type": "Asymmetric Split",
+      "description": "Left: Large playful typography + CTA. Right: Organic shaped mask image of happy dog.",
+      "grid": "grid-cols-1 lg:grid-cols-12 gap-12"
+    },
+    "walker_grid": {
+      "type": "Masonry/Bento Lite",
+      "description": "Responsive grid. Cards should have sufficient whitespace.",
+      "classes": "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"
+    }
+  },
+  "image_urls": {
+    "hero_dog": {
+      "url": "https://images.unsplash.com/photo-1759914915105-37d1b016a982?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NTY2NzF8MHwxfHNlYXJjaHwyfHxoYXBweSUyMGRvZyUyMHBvcnRyYWl0JTIwcGFya3xlbnwwfHx8fDE3NzExOTg3NjV8MA&ixlib=rb-4.1.0&q=85",
+      "alt": "Happy Corgi in Park",
+      "usage": "Hero Section Main Image"
+    },
+    "walker_group": {
+      "url": "https://images.unsplash.com/photo-1759193513693-97638b7f1160?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NTYxOTB8MHwxfHNlYXJjaHw0fHxkb2clMjB3YWxrZXIlMjBmcmllbmRseSUyMGNpdHl8ZW58MHx8fHwxNzcxMTk4NzY2fDA&ixlib=rb-4.1.0&q=85",
+      "alt": "Walkers with dogs",
+      "usage": "Become a Walker Section / Community"
+    },
+    "map_preview": {
+      "url": "https://images.unsplash.com/photo-1759802524049-2421ddaee0fe?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NTY2NjZ8MHwxfHNlYXJjaHwxfHxtYXAlMjBuYXZpZ2F0aW9uJTIwY2l0eSUyMHN0cmVldHxlbnwwfHx8fDE3NzExOTg3Njl8MA&ixlib=rb-4.1.0&q=85",
+      "alt": "Map Navigation",
+      "usage": "Search Page Background / Preview"
+    },
+    "happy_owner": {
+      "url": "https://images.unsplash.com/photo-1713764054243-ad6d1af5723d?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA2ODl8MHwxfHNlYXJjaHwxfHxwZXQlMjBvd25lciUyMGhhcHB5JTIwc21hcnRwaG9uZXxlbnwwfHx8fDE3NzExOTg3Njh8MA&ixlib=rb-4.1.0&q=85",
+      "alt": "Happy Owner on Phone",
+      "usage": "Testimonials / Mobile App Promo"
+    }
+  },
+  "instructions_to_main_agent": {
+    "theme": "Light Mode ONLY. Do not implement dark mode for this MVP.",
+    "language": "SPANISH (Español) for all text.",
+    "icons": "Use lucide-react. Icon style: Rounded, slightly thicker stroke (2px) if possible.",
+    "animations": "Use framer-motion for page transitions and card hover effects.",
+    "maps": "Use react-leaflet or google-maps-react (if key available) or a static placeholder with the provided map image for MVP.",
+    "forms": "Use react-hook-form + zod for validation. Style inputs with the defined rounded-xl look.",
+    "testing": "Add data-testid to all interactive elements."
+  },
+  "UNIVERSAL_GUIDELINES_FOR_MAIN_AGENT": [
+    "You tend to converge toward generic, 'on distribution' outputs. Avoid this: make creative, distinctive frontends that surprise and delight.",
+    "Don't make generic centered layouts, simplistic gradients, and uniform styling.",
+    "Create depth through layered design elements with z-index hierarchy",
+    "Use glass-morphism effects with backdrop filters (12-24px blur)",
+    "You MUST NOT apply universal transition. Eg: transition: all. This results in breaking transforms. Always add transitions for specific interactive elements like button, input excluding transforms",
+    "You MUST NOT center align the app container, ie do not add .App { text-align: center; } in the css file. This disrupts the human natural reading flow of text",
+    "Always use modern button styles like pill-shaped, or sharp button with interaction animations & color relevant to the app style",
+    "NEVER: use AI assistant Emoji characters like 🤖 etc for icons.",
+    "Every interaction needs micro-animations - hover states, transitions, parallax effects, and entrance animations. Static = dead.",
+    "Use 2-3x more spacing than feels comfortable. Cramped designs look cheap.",
+    "Subtle grain textures, noise overlays, custom cursors, selection states, and loading animations: separates good from extraordinary.",
+    "Main agent relies on these image URLs. Missing categories (especially sponsor logos) = main agent will use placeholder text which is FORBIDDEN",
+    "Prioritize using pre-existing components from src/components/ui when applicable",
+    "Create new components that match the style and conventions of existing components when needed",
+    "Examine existing components to understand the project's component patterns before creating new ones",
+    "Components MUST use named exports (export const ComponentName = ...)",
+    "Pages MUST use default exports (export default function PageName() {...})",
+    "Use 'sonner' for toasts. Sonner component are located in /app/src/components/ui/sonner.tsx"
+  ]
+}
