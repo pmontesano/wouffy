@@ -247,9 +247,7 @@ async def logout(session_token: Optional[str] = Cookie(None)):
     return response
 
 @api_router.patch("/auth/role")
-async def update_role(role_update: RoleUpdate, current_user: User = None):
-    current_user = await get_current_user()
-    
+async def update_role(role_update: RoleUpdate, current_user: User = Depends(get_current_user)):
     await db.users.update_one(
         {"user_id": current_user.user_id},
         {"$set": {"role": role_update.role.value}}
