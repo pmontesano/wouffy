@@ -364,9 +364,7 @@ async def update_walker_profile(profile: WalkerProfileCreate, current_user: User
 
 # Walk Endpoints
 @api_router.post("/walks", response_model=Walk)
-async def create_walk(walk_create: WalkCreate, current_user: User = None):
-    current_user = await get_current_user()
-    
+async def create_walk(walk_create: WalkCreate, current_user: User = Depends(get_current_user)):
     if current_user.role != UserRole.OWNER:
         raise HTTPException(status_code=403, detail="Solo usuarios con rol OWNER pueden crear solicitudes de paseo")
     
