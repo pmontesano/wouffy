@@ -131,7 +131,10 @@ class RoleUpdate(BaseModel):
     role: UserRole
 
 # Auth Helper
-async def get_current_user(session_token: Optional[str] = Cookie(None), authorization: Optional[str] = Header(None)):
+async def get_current_user(
+    session_token: Optional[str] = Cookie(None), 
+    authorization: Optional[str] = Header(None)
+) -> User:
     token = session_token
     if not token and authorization:
         if authorization.startswith("Bearer "):
