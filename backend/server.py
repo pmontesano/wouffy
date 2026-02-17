@@ -220,7 +220,8 @@ async def exchange_session(x_session_id: str = Header(...)):
     if isinstance(user_data["created_at"], str):
         user_data["created_at"] = datetime.fromisoformat(user_data["created_at"])
     
-    response = JSONResponse(content=user_data)
+    user_obj = User(**user_data)
+    response = JSONResponse(content=user_obj.model_dump(mode='json'))
     response.set_cookie(
         key="session_token",
         value=session_token,
