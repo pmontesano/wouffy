@@ -17,6 +17,9 @@ import CreateWalkRequest from './pages/CreateWalkRequest';
 import MyWalks from './pages/MyWalks';
 import WalkerRequests from './pages/WalkerRequests';
 import CreateWalkerProfile from './pages/CreateWalkerProfile';
+import Account from './pages/Account';
+import MyPets from './pages/MyPets';
+import PetForm from './pages/PetForm';
 
 function AppRouter() {
   const location = useLocation();
