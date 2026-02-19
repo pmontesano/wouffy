@@ -87,6 +87,38 @@ function AppRouter() {
             </ProtectedRoute>
           }
         />
+        <Route
+          path="/app/account"
+          element={
+            <ProtectedRoute>
+              <Account />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/app/pets"
+          element={
+            <ProtectedRoute requireRole="OWNER">
+              <MyPets />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/app/pets/new"
+          element={
+            <ProtectedRoute requireRole="OWNER">
+              <PetForm />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/app/pets/:petId/edit"
+          element={
+            <ProtectedRoute requireRole="OWNER">
+              <PetForm />
+            </ProtectedRoute>
+          }
+        />
       </Routes>
     </>
   );
