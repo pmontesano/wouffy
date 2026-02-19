@@ -41,6 +41,11 @@ class PetSize(str, Enum):
     M = "M"
     L = "L"
 
+class PetSpecies(str, Enum):
+    DOG = "DOG"
+    CAT = "CAT"
+    OTHER = "OTHER"
+
 # Models
 class User(BaseModel):
     model_config = ConfigDict(extra="ignore")
