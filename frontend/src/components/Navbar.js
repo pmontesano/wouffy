@@ -1,7 +1,7 @@
 import React from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { Menu, User, LogOut, Home, MapPin, Calendar } from 'lucide-react';
+import { Menu, User, LogOut, Home, MapPin, Calendar, UserCircle } from 'lucide-react';
 
 export default function Navbar() {
   const { user, logout } = useAuth();
@@ -74,6 +74,18 @@ export default function Navbar() {
                     <span>Solicitudes</span>
                   </Link>
                 )}
+                <Link
+                  to="/app/account"
+                  className={`flex items-center space-x-2 px-4 py-2 rounded-full transition-all ${
+                    isActive('/app/account') || location.pathname.startsWith('/app/')
+                      ? 'bg-[#88D8B0] text-white'
+                      : 'text-gray-700 hover:bg-gray-100'
+                  }`}
+                  data-testid="nav-account-link"
+                >
+                  <UserCircle size={18} />
+                  <span>Mi Cuenta</span>
+                </Link>
                 <div className="flex items-center space-x-3">
                   {user.picture && (
                     <img
@@ -145,6 +157,13 @@ export default function Navbar() {
                     Solicitudes
                   </Link>
                 )}
+                <Link
+                  to="/app/account"
+                  className="block px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-lg"
+                  onClick={() => setMobileMenuOpen(false)}
+                >
+                  Mi Cuenta
+                </Link>
                 <button
                   onClick={() => {
                     handleLogout();
