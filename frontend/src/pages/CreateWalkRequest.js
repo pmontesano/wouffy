@@ -13,6 +13,10 @@ export default function CreateWalkRequest() {
   const [pets, setPets] = useState([]);
   const [loadingPets, setLoadingPets] = useState(true);
   
+  // New state for address selection
+  const [userProfile, setUserProfile] = useState(null);
+  const [addressOption, setAddressOption] = useState('custom'); // 'profile' or 'custom'
+
   const navigate = useNavigate();
   const { user } = useAuth();
 
@@ -38,43 +42,55 @@ export default function CreateWalkRequest() {
       return;
     }
 
-    fetchWalker();
-    fetchPets();
-  }, [walkerId, user]);
+    const fetchData = async () => {
+      try {
+        const [walkerRes, petsRes, profileRes] = await Promise.all([
+          api.get(`/walkers/${walkerId}`),
+          api.get('/me/pets'),
+          api.get('/me/profile')
+        ]);
 
-  const fetchWalker = async () => {
-    try {
-      const response = await api.get(`/walkers/${walkerId}`);
-      setWalker(response.data);
-    } catch (error) {
-      console.error('Error al cargar paseador:', error);
-      toast.error('Error al cargar el paseador');
-    }
-  };
+        setWalker(walkerRes.data);
+        setPets(petsRes.data);
+        setUserProfile(profileRes.data);
 
-  const fetchPets = async () => {
-    try {
-      const response = await api.get('/me/pets');
-      setPets(response.data);
-      
-      // Auto-select default pet
-      const defaultPet = response.data.find(p => p.is_default);
-      if (defaultPet) {
-        setFormData(prev => ({ ...prev, petId: defaultPet.pet_id }));
-      } else if (response.data.length > 0) {
-        setFormData(prev => ({ ...prev, petId: response.data[0].pet_id }));
+        // Auto-select default pet
+        const defaultPet = petsRes.data.find(p => p.is_default);
+        if (defaultPet) {
+          setFormData(prev => ({ ...prev, petId: defaultPet.pet_id }));
+        } else if (petsRes.data.length > 0) {
+          setFormData(prev => ({ ...prev, petId: petsRes.data[0].pet_id }));
+        }
+
+        // Auto-select profile address if available
+        if (profileRes.data.address_text) {
+          setAddressOption('profile');
+          setFormData(prev => ({ ...prev, address: profileRes.data.address_text }));
+        }
+
+      } catch (error) {
+        console.error('Error al cargar datos:', error);
+        toast.error('Error al cargar la información necesaria');
+      } finally {
+        setLoadingPets(false);
       }
-    } catch (error) {
-      console.error('Error al cargar mascotas:', error);
-      toast.error('Error al cargar tus mascotas');
-    } finally {
-      setLoadingPets(false);
-    }
-  };
+    };
+
+    fetchData();
+  }, [walkerId, user]);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
     setFormData((prev) => ({ ...prev, [name]: value }));
+  };
+
+  const handleAddressOptionChange = (option) => {
+    setAddressOption(option);
+    if (option === 'profile' && userProfile?.address_text) {
+      setFormData(prev => ({ ...prev, address: userProfile.address_text }));
+    } else if (option === 'custom') {
+      setFormData(prev => ({ ...prev, address: '' }));
+    }
   };
 
   const generateTimeSlots = () => {
@@ -108,10 +124,7 @@ export default function CreateWalkRequest() {
       const walkData = {
         walker_profile_id: walkerId,
         date_time_start: dateTimeStart.toISOString(),
-        estimated_duration_minutes: parseInt(formData.duration), // Changed from duration_minutes to estimated_duration_minutes to match backend WalkCreate model?
-        // Wait, checking server.py: WalkCreate has estimated_duration_minutes: int
-        // Let's verify server.py WalkCreate definition.
-        // It says: estimated_duration_minutes: int
+        estimated_duration_minutes: parseInt(formData.duration),
         start_address_text: formData.address,
         notes: formData.notes,
         pet_id: formData.petId
@@ -228,16 +241,51 @@ export default function CreateWalkRequest() {
                 <MapPin size={16} className="inline mr-2" />
                 Dirección de encuentro *
               </label>
-              <input
-                type="text"
-                name="address"
-                value={formData.address}
-                onChange={handleChange}
-                placeholder="Ej: Av. Santa Fe 1234, Palermo"
-                className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-[#88D8B0] focus:border-[#88D8B0] outline-none"
-                required
-                data-testid="walk-address-input"
-              />
+              
+              {userProfile?.address_text ? (
+                <div className="space-y-3 mb-3">
+                  <label className="flex items-center space-x-3 p-3 border rounded-xl cursor-pointer hover:bg-gray-50 transition-colors">
+                    <input
+                      type="radio"
+                      name="addressOption"
+                      value="profile"
+                      checked={addressOption === 'profile'}
+                      onChange={() => handleAddressOptionChange('profile')}
+                      className="text-[#88D8B0] focus:ring-[#88D8B0]"
+                    />
+                    <div>
+                      <span className="font-semibold block text-gray-800">Usar mi dirección guardada</span>
+                      <span className="text-gray-500 text-sm">{userProfile.address_text}</span>
+                    </div>
+                  </label>
+
+                  <label className="flex items-center space-x-3 p-3 border rounded-xl cursor-pointer hover:bg-gray-50 transition-colors">
+                    <input
+                      type="radio"
+                      name="addressOption"
+                      value="custom"
+                      checked={addressOption === 'custom'}
+                      onChange={() => handleAddressOptionChange('custom')}
+                      className="text-[#88D8B0] focus:ring-[#88D8B0]"
+                    />
+                    <span className="font-semibold text-gray-800">Ingresar otra dirección</span>
+                  </label>
+                </div>
+              ) : null}
+
+              {(addressOption === 'custom' || !userProfile?.address_text) && (
+                <input
+                  type="text"
+                  name="address"
+                  value={formData.address}
+                  onChange={handleChange}
+                  placeholder="Ej: Av. Santa Fe 1234, Palermo"
+                  className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-[#88D8B0] focus:border-[#88D8B0] outline-none animate-fadeIn"
+                  required
+                  autoFocus={addressOption === 'custom'}
+                  data-testid="walk-address-input"
+                />
+              )}
             </div>
 
             <div className="border-t pt-6">
