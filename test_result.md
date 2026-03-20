@@ -59,7 +59,7 @@
 ## agent_communication:
 ##     -agent: "main"  # or "testing" or "user"
 ##     -message: "Communication message between agents"
-
+##
 # Protocol Guidelines for Main agent
 #
 # 1. Update Test Result File Before Testing:
@@ -101,3 +101,69 @@
 #====================================================================================================
 # Testing Data - Main Agent and testing sub agent both should log testing data below this section
 #====================================================================================================
+
+user_problem_statement: Fix public route redirects, pet photo previews, and walk request form UX.
+backend:
+  - task: "Fix static file serving for pet photos"
+    implemented: true
+    working: true
+    file: "backend/server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+        - working: true
+          agent: "main"
+          comment: "Mounted /api/uploads and updated upload endpoint."
+  - task: "Update create_walk endpoint to fetch pet details"
+    implemented: true
+    working: true
+    file: "backend/server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+        - working: true
+          agent: "main"
+          comment: "Updated to fetch pet name/size/notes from DB using pet_id."
+
+frontend:
+  - task: "Fix public route redirect (Interceptor)"
+    implemented: true
+    working: true
+    file: "frontend/src/utils/api.js"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+        - working: true
+          agent: "main"
+          comment: "Modified interceptor to ignore 401 on /auth/me."
+  - task: "Improve Walk Request Form (Pet Dropdown & Time Slots)"
+    implemented: true
+    working: true
+    file: "frontend/src/pages/CreateWalkRequest.js"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+        - working: true
+          agent: "main"
+          comment: "Replaced manual inputs with Select for Pets and Time (15m intervals)."
+
+metadata:
+  created_by: "main_agent"
+  version: "1.0"
+  test_sequence: 1
+  run_ui: false
+
+test_plan:
+  current_focus:
+    - "Walk Tracking (Next Phase)"
+  stuck_tasks: []
+  test_all: false
+  test_priority: "sequential"
+
+agent_communication:
+    - agent: "main"
+      message: "Fixed P0/P1 issues. Ready for Tracking implementation."

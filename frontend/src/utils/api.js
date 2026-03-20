@@ -16,6 +16,11 @@ api.interceptors.response.use(
   (response) => response,
   (error) => {
     if (error.response?.status === 401) {
+      // Ignorar 401 de /auth/me para evitar loop de redirección en carga inicial
+      if (error.config.url?.includes('/auth/me')) {
+        return Promise.reject(error);
+      }
+
       // Limpiar cookie y redirigir a login
       document.cookie = 'session_token=; path=/; max-age=0';
       

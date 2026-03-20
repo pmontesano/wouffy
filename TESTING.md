@@ -4,7 +4,7 @@
 
 ## 🚀 Acceso Rápido
 
-**URL de la aplicación:** https://wouffy-walks.preview.emergentagent.com
+**URL de la aplicación:** https://paseo-live.preview.emergentagent.com
 
 ## 🔐 Testing con Usuarios Demo
 
@@ -12,7 +12,7 @@ Como el flujo de autenticación con Google requiere interacción humana real, he
 
 ### Opción 1: Testear como DUEÑO (OWNER)
 
-1. Abrí la aplicación: https://wouffy-walks.preview.emergentagent.com
+1. Abrí la aplicación: https://paseo-live.preview.emergentagent.com
 2. Abrí la consola del navegador (presiona `F12`)
 3. En la pestaña "Console", pegá este comando y presiona Enter:
 ```javascript

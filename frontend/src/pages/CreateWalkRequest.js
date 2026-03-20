@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams, Link } from 'react-router-dom';
 import { api } from '../utils/api';
 import { useAuth } from '../context/AuthContext';
-import { ArrowLeft, Calendar, Clock, MapPin, Dog } from 'lucide-react';
+import { ArrowLeft, Calendar, Clock, MapPin, Dog, AlertCircle, Plus } from 'lucide-react';
 import { toast } from 'sonner';
 
 export default function CreateWalkRequest() {
@@ -10,18 +10,19 @@ export default function CreateWalkRequest() {
   const walkerId = searchParams.get('walkerId');
   const [walker, setWalker] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [pets, setPets] = useState([]);
+  const [loadingPets, setLoadingPets] = useState(true);
+  
   const navigate = useNavigate();
   const { user } = useAuth();
 
   const [formData, setFormData] = useState({
     date: '',
-    time: '',
+    time: '09:00',
     duration: '60',
     address: '',
     notes: '',
-    petName: '',
-    petSize: 'M',
-    petNotes: '',
+    petId: ''
   });
 
   useEffect(() => {
@@ -38,7 +39,8 @@ export default function CreateWalkRequest() {
     }
 
     fetchWalker();
-  }, [walkerId]);
+    fetchPets();
+  }, [walkerId, user]);
 
   const fetchWalker = async () => {
     try {
@@ -50,15 +52,47 @@ export default function CreateWalkRequest() {
     }
   };
 
+  const fetchPets = async () => {
+    try {
+      const response = await api.get('/me/pets');
+      setPets(response.data);
+      
+      // Auto-select default pet
+      const defaultPet = response.data.find(p => p.is_default);
+      if (defaultPet) {
+        setFormData(prev => ({ ...prev, petId: defaultPet.pet_id }));
+      } else if (response.data.length > 0) {
+        setFormData(prev => ({ ...prev, petId: response.data[0].pet_id }));
+      }
+    } catch (error) {
+      console.error('Error al cargar mascotas:', error);
+      toast.error('Error al cargar tus mascotas');
+    } finally {
+      setLoadingPets(false);
+    }
+  };
+
   const handleChange = (e) => {
     const { name, value } = e.target;
     setFormData((prev) => ({ ...prev, [name]: value }));
   };
 
+  const generateTimeSlots = () => {
+    const slots = [];
+    for (let i = 7; i <= 21; i++) { // 7 AM to 9 PM
+      for (let j = 0; j < 60; j += 15) {
+        const hour = i.toString().padStart(2, '0');
+        const minute = j.toString().padStart(2, '0');
+        slots.push(`${hour}:${minute}`);
+      }
+    }
+    return slots;
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
 
-    if (!formData.date || !formData.time || !formData.address || !formData.petName) {
+    if (!formData.date || !formData.time || !formData.address || !formData.petId) {
       toast.error('Por favor completá todos los campos obligatorios');
       return;
     }
@@ -74,12 +108,13 @@ export default function CreateWalkRequest() {
       const walkData = {
         walker_profile_id: walkerId,
         date_time_start: dateTimeStart.toISOString(),
-        duration_minutes: parseInt(formData.duration),
-        address_text: formData.address,
+        estimated_duration_minutes: parseInt(formData.duration), // Changed from duration_minutes to estimated_duration_minutes to match backend WalkCreate model?
+        // Wait, checking server.py: WalkCreate has estimated_duration_minutes: int
+        // Let's verify server.py WalkCreate definition.
+        // It says: estimated_duration_minutes: int
+        start_address_text: formData.address,
         notes: formData.notes,
-        pet_name: formData.petName,
-        pet_size: formData.petSize,
-        pet_notes: formData.petNotes,
+        pet_id: formData.petId
       };
 
       await api.post('/walks', walkData);
@@ -93,7 +128,7 @@ export default function CreateWalkRequest() {
     }
   };
 
-  if (!walker) {
+  if (!walker || loadingPets) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#88D8B0]"></div>
@@ -102,6 +137,7 @@ export default function CreateWalkRequest() {
   }
 
   const estimatedCost = (walker.price_per_hour * parseInt(formData.duration)) / 60;
+  const selectedPet = pets.find(p => p.pet_id === formData.petId);
 
   return (
     <div className="min-h-screen bg-[#F9FAFB]">
@@ -151,15 +187,20 @@ export default function CreateWalkRequest() {
                   <Clock size={16} className="inline mr-2" />
                   Hora *
                 </label>
-                <input
-                  type="time"
+                <select
                   name="time"
                   value={formData.time}
                   onChange={handleChange}
                   className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-[#88D8B0] focus:border-[#88D8B0] outline-none"
                   required
-                  data-testid="walk-time-input"
-                />
+                  data-testid="walk-time-select"
+                >
+                  {generateTimeSlots().map(time => (
+                    <option key={time} value={time}>
+                      {time} hs
+                    </option>
+                  ))}
+                </select>
               </div>
             </div>
 
@@ -199,77 +240,91 @@ export default function CreateWalkRequest() {
               />
             </div>
 
+            <div className="border-t pt-6">
+              <h3 className="text-lg font-bold text-[#1F2937] mb-4" style={{ fontFamily: 'Outfit' }}>
+                <Dog size={20} className="inline mr-2" />
+                Mascota
+              </h3>
+
+              {pets.length === 0 ? (
+                <div className="bg-yellow-50 border border-yellow-200 rounded-xl p-4 flex items-start space-x-3">
+                  <AlertCircle className="text-yellow-600 mt-1" size={20} />
+                  <div>
+                    <h4 className="font-semibold text-yellow-800">No tenés mascotas registradas</h4>
+                    <p className="text-yellow-700 text-sm mb-3">
+                      Necesitás agregar al menos una mascota para solicitar un paseo.
+                    </p>
+                    <Link
+                      to="/app/pets/new"
+                      className="inline-flex items-center space-x-2 text-[#88D8B0] font-semibold hover:underline"
+                    >
+                      <Plus size={16} />
+                      <span>Agregar Mascota</span>
+                    </Link>
+                  </div>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">
+                      Seleccioná tu mascota *
+                    </label>
+                    <select
+                      name="petId"
+                      value={formData.petId}
+                      onChange={handleChange}
+                      className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-[#88D8B0] focus:border-[#88D8B0] outline-none"
+                      required
+                      data-testid="pet-select"
+                    >
+                      <option value="">Seleccionar mascota...</option>
+                      {pets.map(pet => (
+                        <option key={pet.pet_id} value={pet.pet_id}>
+                          {pet.name} ({pet.species === 'DOG' ? 'Perro' : 'Gato'} - {pet.size})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  
+                  {selectedPet && (
+                     <div className="bg-gray-50 rounded-xl p-4 border border-gray-100">
+                        <div className="flex items-center space-x-4">
+                          {selectedPet.photo_url ? (
+                             <img src={selectedPet.photo_url} alt={selectedPet.name} className="w-12 h-12 rounded-full object-cover border border-gray-200" />
+                          ) : (
+                             <div className="w-12 h-12 bg-[#88D8B0] bg-opacity-20 rounded-full flex items-center justify-center">
+                                <Dog size={20} className="text-[#88D8B0]" />
+                             </div>
+                          )}
+                          <div>
+                             <p className="font-semibold text-gray-800">{selectedPet.name}</p>
+                             <p className="text-sm text-gray-500">
+                               {selectedPet.species === 'DOG' ? 'Perro' : 'Gato'} • {selectedPet.size}
+                             </p>
+                             {selectedPet.notes && (
+                               <p className="text-sm text-gray-500 italic mt-1">"{selectedPet.notes}"</p>
+                             )}
+                          </div>
+                        </div>
+                     </div>
+                  )}
+                </div>
+              )}
+            </div>
+
             <div>
               <label className="block text-sm font-semibold text-gray-700 mb-2">
-                Notas adicionales
+                Notas adicionales para el paseador
               </label>
               <textarea
                 name="notes"
                 value={formData.notes}
                 onChange={handleChange}
-                placeholder="Ej: Mi perro tira mucho de la correa, por favor tené paciencia"
+                placeholder="Ej: Llegar 5 minutos antes, tocar timbre..."
                 rows="3"
                 className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-[#88D8B0] focus:border-[#88D8B0] outline-none resize-none"
                 data-testid="walk-notes-input"
               />
-            </div>
-
-            <div className="border-t pt-6">
-              <h3 className="text-lg font-bold text-[#1F2937] mb-4" style={{ fontFamily: 'Outfit' }}>
-                <Dog size={20} className="inline mr-2" />
-                Información de tu mascota
-              </h3>
-
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-2">
-                    Nombre *
-                  </label>
-                  <input
-                    type="text"
-                    name="petName"
-                    value={formData.petName}
-                    onChange={handleChange}
-                    placeholder="Nombre de tu mascota"
-                    className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-[#88D8B0] focus:border-[#88D8B0] outline-none"
-                    required
-                    data-testid="pet-name-input"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-2">
-                    Tamaño *
-                  </label>
-                  <select
-                    name="petSize"
-                    value={formData.petSize}
-                    onChange={handleChange}
-                    className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-[#88D8B0] focus:border-[#88D8B0] outline-none"
-                    required
-                    data-testid="pet-size-select"
-                  >
-                    <option value="S">Pequeño (hasta 10kg)</option>
-                    <option value="M">Mediano (10-25kg)</option>
-                    <option value="L">Grande (más de 25kg)</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-2">
-                    Observaciones
-                  </label>
-                  <textarea
-                    name="petNotes"
-                    value={formData.petNotes}
-                    onChange={handleChange}
-                    placeholder="Ej: Es muy sociable con otros perros, le encanta jugar"
-                    rows="2"
-                    className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-[#88D8B0] focus:border-[#88D8B0] outline-none resize-none"
-                    data-testid="pet-notes-input"
-                  />
-                </div>
-              </div>
             </div>
 
             <div className="bg-[#F9FAFB] rounded-2xl p-6">
@@ -307,7 +362,7 @@ export default function CreateWalkRequest() {
               </button>
               <button
                 type="submit"
-                disabled={loading}
+                disabled={loading || pets.length === 0}
                 className="flex-1 btn-secondary disabled:opacity-50 disabled:cursor-not-allowed"
                 data-testid="submit-walk-request-button"
               >

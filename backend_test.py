@@ -6,7 +6,7 @@ import subprocess
 import time
 
 class WouffyAPITester:
-    def __init__(self, base_url="https://wouffy-walks.preview.emergentagent.com"):
+    def __init__(self, base_url="https://paseo-live.preview.emergentagent.com"):
         self.base_url = base_url
         self.token = None
         self.test_user_id = None

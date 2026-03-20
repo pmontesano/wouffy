@@ -14,7 +14,6 @@ from datetime import datetime, timezone, timedelta
 import httpx
 from enum import Enum
 
-import os
 import shutil
 
 ROOT_DIR = Path(__file__).parent
@@ -446,7 +445,7 @@ async def upload_pet_photo(file: UploadFile = File(...), current_user: User = De
         shutil.copyfileobj(file.file, buffer)
     
     # Retornar URL relativa
-    photo_url = f"/uploads/pets/{unique_filename}"
+    photo_url = f"/api/uploads/pets/{unique_filename}"
     
     return {"photo_url": photo_url, "message": "Foto subida correctamente"}
 
@@ -730,10 +729,18 @@ async def create_walk(walk_create: WalkCreate, current_user: User = Depends(get_
     if current_user.role != UserRole.OWNER:
         raise HTTPException(status_code=403, detail="Solo usuarios con rol OWNER pueden crear solicitudes de paseo")
     
+    # Fetch pet details
+    pet = await db.pets.find_one({"pet_id": walk_create.pet_id, "owner_user_id": current_user.user_id}, {"_id": 0})
+    if not pet:
+        raise HTTPException(status_code=404, detail="Mascota no encontrada")
+
     walk_doc = {
         "walk_id": f"walk_{uuid.uuid4().hex[:12]}",
         "owner_user_id": current_user.user_id,
         **walk_create.model_dump(),
+        "pet_name": pet["name"],
+        "pet_size": pet["size"],
+        "pet_notes": pet.get("notes"),
         "status": WalkStatus.REQUESTED.value,
         "created_at": datetime.now(timezone.utc).isoformat(),
         "updated_at": datetime.now(timezone.utc).isoformat()
@@ -889,7 +896,7 @@ app.include_router(api_router)
 # Servir archivos estáticos (uploads)
 uploads_dir = os.path.join(os.path.dirname(__file__), "uploads")
 os.makedirs(uploads_dir, exist_ok=True)
-app.mount("/uploads", StaticFiles(directory=uploads_dir), name="uploads")
+app.mount("/api/uploads", StaticFiles(directory=uploads_dir), name="uploads")
 
 app.add_middleware(
     CORSMiddleware,

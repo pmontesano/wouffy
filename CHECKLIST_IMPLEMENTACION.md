@@ -175,11 +175,11 @@ document.cookie = 'session_token=demo_session_owner_a3c7011e637c; path=/; max-ag
 5. Verificar que los endpoints funcionan:
 ```bash
 # Ver mi perfil
-curl -X GET "https://wouffy-walks.preview.emergentagent.com/api/me/profile" \
+curl -X GET "https://paseo-live.preview.emergentagent.com/api/me/profile" \
   -H "Authorization: Bearer demo_session_owner_a3c7011e637c"
 
 # Ver mis mascotas
-curl -X GET "https://wouffy-walks.preview.emergentagent.com/api/me/pets" \
+curl -X GET "https://paseo-live.preview.emergentagent.com/api/me/pets" \
   -H "Authorization: Bearer demo_session_owner_a3c7011e637c"
 ```
 
