@@ -170,7 +170,7 @@ class Walk(BaseModel):
     pet_name: Optional[str] = None
     pet_size: Optional[PetSize] = None
     pet_notes: Optional[str] = None
-    scheduled_start_at: datetime
+    date_time_start: datetime
     estimated_duration_minutes: int
     actual_start_at: Optional[datetime] = None
     actual_end_at: Optional[datetime] = None
@@ -183,7 +183,7 @@ class Walk(BaseModel):
 class WalkCreate(BaseModel):
     pet_id: str
     walker_profile_id: str
-    scheduled_start_at: datetime
+    date_time_start: datetime
     estimated_duration_minutes: int
     start_address_text: str
     notes: Optional[str] = None

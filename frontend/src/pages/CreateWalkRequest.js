@@ -135,7 +135,22 @@ export default function CreateWalkRequest() {
       navigate('/me/walks');
     } catch (error) {
       console.error('Error al crear solicitud:', error);
-      toast.error(error.response?.data?.detail || 'Error al crear la solicitud');
+      let errorMessage = 'Error al crear la solicitud';
+      
+      if (error.response?.data?.detail) {
+        if (typeof error.response.data.detail === 'string') {
+          errorMessage = error.response.data.detail;
+        } else if (Array.isArray(error.response.data.detail)) {
+          // Handle Pydantic validation errors (array of objects)
+          errorMessage = error.response.data.detail
+            .map(err => `${err.loc[1]}: ${err.msg}`)
+            .join(', ');
+        } else if (typeof error.response.data.detail === 'object') {
+           errorMessage = JSON.stringify(error.response.data.detail);
+        }
+      }
+      
+      toast.error(errorMessage);
     } finally {
       setLoading(false);
     }

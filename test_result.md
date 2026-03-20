@@ -102,7 +102,7 @@
 # Testing Data - Main Agent and testing sub agent both should log testing data below this section
 #====================================================================================================
 
-user_problem_statement: Fix public route redirects, pet photo previews, and walk request form UX.
+user_problem_statement: Fix runtime crash in CreateWalkRequest and mismatch in WalkCreate model.
 backend:
   - task: "Fix static file serving for pet photos"
     implemented: true
@@ -126,6 +126,17 @@ backend:
         - working: true
           agent: "main"
           comment: "Updated to fetch pet name/size/notes from DB using pet_id."
+  - task: "Fix Walk/WalkCreate model field mismatch (scheduled_start_at vs date_time_start)"
+    implemented: true
+    working: true
+    file: "backend/server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+        - working: true
+          agent: "main"
+          comment: "Renamed scheduled_start_at to date_time_start in Walk/WalkCreate models to match logic."
 
 frontend:
   - task: "Fix public route redirect (Interceptor)"
@@ -150,11 +161,25 @@ frontend:
         - working: true
           agent: "main"
           comment: "Replaced manual inputs with Select for Pets and Time (15m intervals)."
+  - task: "Fix runtime error in toast.error"
+    implemented: true
+    working: true
+    file: "frontend/src/pages/CreateWalkRequest.js"
+    stuck_count: 1
+    priority: "high"
+    needs_retesting: false
+    status_history:
+        - working: false
+          agent: "user"
+          comment: "Reported runtime error: Objects are not valid as a React child."
+        - working: true
+          agent: "main"
+          comment: "Added handling for object/array error details in catch block."
 
 metadata:
   created_by: "main_agent"
   version: "1.0"
-  test_sequence: 1
+  test_sequence: 2
   run_ui: false
 
 test_plan:
@@ -166,4 +191,4 @@ test_plan:
 
 agent_communication:
     - agent: "main"
-      message: "Fixed P0/P1 issues. Ready for Tracking implementation."
+      message: "Fixed runtime crash and backend model mismatch. Ready for re-testing."
