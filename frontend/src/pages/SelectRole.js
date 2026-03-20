@@ -1,39 +1,38 @@
 import React, { useState } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { api } from '../utils/api';
 import { useAuth } from '../context/AuthContext';
-import { User, Briefcase } from 'lucide-react';
+import { User, Briefcase, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 
 export default function SelectRole() {
-  const [selectedRole, setSelectedRole] = useState(null);
-  const [loading, setLoading] = useState(false);
+  /** 'OWNER' | 'WALKER' | null — qué tarjeta está enviando */
+  const [submitting, setSubmitting] = useState(null);
   const navigate = useNavigate();
-  const location = useLocation();
   const { updateUser } = useAuth();
 
-  const handleSubmit = async () => {
-    if (!selectedRole) {
-      toast.error('¡Seleccioná un rol para continuar!');
-      return;
-    }
+  const handleChooseRole = async (role) => {
+    if (submitting) return;
 
-    setLoading(true);
+    setSubmitting(role);
     try {
-      const response = await api.patch('/auth/role', { role: selectedRole });
+      const response = await api.patch('/auth/role', { role });
       updateUser(response.data);
       toast.success('¡Rol seleccionado correctamente!');
 
-      if (selectedRole === 'WALKER') {
-        navigate('/walker/profile/create');
+      if (role === 'WALKER') {
+        navigate('/walker/profile/create', { replace: true });
       } else {
-        navigate('/walkers');
+        navigate('/walkers', { replace: true });
       }
     } catch (error) {
       console.error('Error al actualizar rol:', error);
-      toast.error('Error al seleccionar rol. Intentá nuevamente.');
+      const detail = error.response?.data?.detail;
+      toast.error(
+        typeof detail === 'string' ? detail : 'Error al seleccionar rol. Intentá nuevamente.'
+      );
     } finally {
-      setLoading(false);
+      setSubmitting(null);
     }
   };
 
@@ -49,17 +48,19 @@ export default function SelectRole() {
             ¿Cómo querés usar Wouffy?
           </h1>
           <p className="text-lg text-gray-600">
-            Seleccioná tu rol para empezar
+            Tocá una opción para continuar
           </p>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <button
-            onClick={() => setSelectedRole('OWNER')}
-            className={`bg-white rounded-3xl p-8 shadow-lg transition-all ${
-              selectedRole === 'OWNER'
-                ? 'ring-4 ring-[#88D8B0] scale-105'
-                : 'hover:shadow-xl hover:scale-102'
+            type="button"
+            onClick={() => handleChooseRole('OWNER')}
+            disabled={!!submitting}
+            className={`text-left bg-white rounded-3xl p-8 shadow-lg transition-all disabled:opacity-60 ${
+              submitting === 'OWNER'
+                ? 'ring-4 ring-[#88D8B0] scale-[1.02]'
+                : 'hover:shadow-xl hover:scale-[1.02] ring-2 ring-transparent'
             }`}
             data-testid="role-owner-button"
           >
@@ -67,7 +68,7 @@ export default function SelectRole() {
               <User size={40} className="text-[#88D8B0]" />
             </div>
             <h2
-              className="text-2xl font-bold text-[#1F2937] mb-3"
+              className="text-2xl font-bold text-[#1F2937] mb-3 text-center"
               style={{ fontFamily: 'Outfit' }}
             >
               Soy Dueño
@@ -89,14 +90,22 @@ export default function SelectRole() {
                 <span>Ver historial de paseos</span>
               </li>
             </ul>
+            {submitting === 'OWNER' && (
+              <p className="mt-6 flex items-center justify-center gap-2 text-[#88D8B0] font-medium">
+                <Loader2 className="animate-spin" size={20} />
+                Guardando…
+              </p>
+            )}
           </button>
 
           <button
-            onClick={() => setSelectedRole('WALKER')}
-            className={`bg-white rounded-3xl p-8 shadow-lg transition-all ${
-              selectedRole === 'WALKER'
-                ? 'ring-4 ring-[#FFCC99] scale-105'
-                : 'hover:shadow-xl hover:scale-102'
+            type="button"
+            onClick={() => handleChooseRole('WALKER')}
+            disabled={!!submitting}
+            className={`text-left bg-white rounded-3xl p-8 shadow-lg transition-all disabled:opacity-60 ${
+              submitting === 'WALKER'
+                ? 'ring-4 ring-[#FFCC99] scale-[1.02]'
+                : 'hover:shadow-xl hover:scale-[1.02] ring-2 ring-transparent'
             }`}
             data-testid="role-walker-button"
           >
@@ -104,13 +113,13 @@ export default function SelectRole() {
               <Briefcase size={40} className="text-[#FFCC99]" />
             </div>
             <h2
-              className="text-2xl font-bold text-[#1F2937] mb-3"
+              className="text-2xl font-bold text-[#1F2937] mb-3 text-center"
               style={{ fontFamily: 'Outfit' }}
             >
               Soy Paseador
             </h2>
             <p className="text-gray-600 mb-4">
-              Ofrecé tus servicios de paseo, gestía solicitudes y generá ingresos haciendo lo que amás.
+              Ofrecé tus servicios de paseo, gestioná solicitudes y generá ingresos haciendo lo que amás.
             </p>
             <ul className="text-left text-gray-600 space-y-2">
               <li className="flex items-center space-x-2">
@@ -126,17 +135,12 @@ export default function SelectRole() {
                 <span>Gestionar tu agenda</span>
               </li>
             </ul>
-          </button>
-        </div>
-
-        <div className="text-center mt-8">
-          <button
-            onClick={handleSubmit}
-            disabled={!selectedRole || loading}
-            className="btn-primary disabled:opacity-50 disabled:cursor-not-allowed"
-            data-testid="confirm-role-button"
-          >
-            {loading ? 'Guardando...' : 'Continuar'}
+            {submitting === 'WALKER' && (
+              <p className="mt-6 flex items-center justify-center gap-2 text-[#FFCC99] font-medium">
+                <Loader2 className="animate-spin" size={20} />
+                Guardando…
+              </p>
+            )}
           </button>
         </div>
       </div>

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams, Link } from 'react-router-dom';
-import { api } from '../utils/api';
+import { api, getBackendPublicOrigin } from '../utils/api';
 import { useAuth } from '../context/AuthContext';
 import { Dog, ArrowLeft, Upload, X } from 'lucide-react';
 import { toast } from 'sonner';
@@ -99,7 +99,7 @@ export default function PetForm() {
         },
       });
 
-      const photoUrl = `${process.env.REACT_APP_BACKEND_URL}${response.data.photo_url}`;
+      const photoUrl = `${getBackendPublicOrigin()}${response.data.photo_url}`;
       setFormData(prev => ({ ...prev, photo_url: photoUrl }));
       toast.success('¡Foto subida correctamente!');
     } catch (error) {

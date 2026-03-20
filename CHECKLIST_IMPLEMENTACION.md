@@ -40,7 +40,7 @@
 - [x] name
 - [x] species (DOG/CAT/OTHER)
 - [x] size (S/M/L)
-- [x] age_years (opcional)
+- [x] date_of_birth (opcional, formato YYYY-MM-DD)
 - [x] notes (opcional)
 - [x] photo_url (opcional)
 - [x] is_default (boolean)
@@ -194,3 +194,27 @@ Todos los requisitos principales han sido implementados y probados. El flujo pos
 - UI/UX profesional
 - Todo en español
 - Seguridad y autorización correctas
+
+---
+
+## Análisis de estado (revisión del checklist)
+
+### Completado según el documento
+
+Todo lo marcado con `[x]` en las secciones anteriores está considerado **hecho**: contexto, objetivos post-login (cuenta, mascotas, CRUD, default), modelo User/UserProfile/Pet, reglas de negocio, endpoints de auth/perfil/mascotas, rutas y UI de `/app/account` y `/app/pets`, autorización front/back, validaciones, extras (auto-perfil, primera mascota default, reasignación al borrar, preview de foto, diseño responsive, etc.).
+
+### Pendiente u opcional (explícito en este archivo)
+
+| Ítem | Notas |
+|------|--------|
+| **react-hook-form + zod** | Marcado como no implementado a propósito; se usa validación manual que cumple el mismo rol. |
+| **Seed data de mascotas demo** | No incluido; las mascotas se crean a mano o vía UI. |
+| **Layout dedicado `/app` con navbar propio** | No hecho; se reutiliza el navbar global de la app. |
+
+### Detalle de modelo (documentación vs código)
+
+El modelo **Pet** en código usa **`date_of_birth`** (opcional); la edad se puede mostrar calculada en el frontend (ver `TESTING.md`).
+
+### Resumen
+
+Los **requisitos principales** del checklist están cubiertos. Lo **único pendiente** listado aquí son mejoras opcionales (librerías de formulario, seeds, layout `/app`) y el ajuste de documentación del campo de edad/fecha de nacimiento.

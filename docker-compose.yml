@@ -1,0 +1,14 @@
+# MongoDB local — requiere Docker Desktop en ejecución.
+# Uso: docker compose up -d
+# Luego en backend/.env: MONGO_URL=mongodb://localhost:27017
+
+services:
+  mongo:
+    image: mongo:7
+    ports:
+      - "27017:27017"
+    volumes:
+      - wouffy_mongo_data:/data/db
+
+volumes:
+  wouffy_mongo_data:

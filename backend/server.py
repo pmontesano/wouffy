@@ -7,7 +7,7 @@ from motor.motor_asyncio import AsyncIOMotorClient
 import os
 import logging
 from pathlib import Path
-from pydantic import BaseModel, Field, ConfigDict
+from pydantic import BaseModel, Field, ConfigDict, ValidationError
 from typing import List, Optional
 import uuid
 from datetime import datetime, timezone, timedelta
@@ -15,9 +15,25 @@ import httpx
 from enum import Enum
 
 import shutil
+from pymongo.errors import PyMongoError
 
 ROOT_DIR = Path(__file__).parent
-load_dotenv(ROOT_DIR / '.env')
+load_dotenv(ROOT_DIR / ".env")
+
+
+def _cors_allow_origins() -> List[str]:
+    """
+    Con allow_credentials=True el navegador no acepta Access-Control-Allow-Origin: *.
+    Si CORS_ORIGINS no está definido o es *, usamos orígenes explícitos del CRA en local.
+    """
+    raw = os.environ.get("CORS_ORIGINS", "").strip()
+    if not raw or raw == "*":
+        return ["http://localhost:3000", "http://127.0.0.1:3000"]
+    parts = [o.strip() for o in raw.split(",") if o.strip()]
+    if "*" in parts:
+        return ["http://localhost:3000", "http://127.0.0.1:3000"]
+    return parts
+
 
 # MongoDB connection
 mongo_url = os.environ['MONGO_URL']
@@ -26,6 +42,15 @@ db = client[os.environ['DB_NAME']]
 
 app = FastAPI()
 api_router = APIRouter(prefix="/api")
+
+# CORS lo antes posible (FastAPI): con credenciales no puede usarse *; debe ir antes de las rutas.
+app.add_middleware(
+    CORSMiddleware,
+    allow_credentials=True,
+    allow_origins=_cors_allow_origins(),
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 # Enums
 class UserRole(str, Enum):
@@ -248,69 +273,119 @@ async def get_current_user(
 
 # Auth Endpoints
 @api_router.post("/auth/session")
-async def exchange_session(x_session_id: str = Header(...)):
+async def exchange_session(x_session_id: str = Header(..., alias="X-Session-ID")):
+    """
+    Intercambia X-Session-ID con demobackend y persiste usuario + sesión en MongoDB.
+    Los 500 suelen ser Mongo caído o respuesta OAuth sin email/name/session_token.
+    """
     # REMINDER: DO NOT HARDCODE THE URL, OR ADD ANY FALLBACKS OR REDIRECT URLS, THIS BREAKS THE AUTH
+    log = logging.getLogger(__name__)
+
     async with httpx.AsyncClient() as client:
         try:
             response = await client.get(
                 "https://demobackend.emergentagent.com/auth/v1/env/oauth/session-data",
                 headers={"X-Session-ID": x_session_id},
-                timeout=10.0
+                timeout=15.0,
             )
             response.raise_for_status()
             data = response.json()
-        except Exception as e:
-            raise HTTPException(status_code=400, detail=f"Error obteniendo datos de sesión: {str(e)}")
-    
-    user_id = f"user_{uuid.uuid4().hex[:12]}"
-    existing_user = await db.users.find_one({"email": data["email"]}, {"_id": 0})
-    
-    if existing_user:
-        user_id = existing_user["user_id"]
-        await db.users.update_one(
-            {"user_id": user_id},
-            {"$set": {
-                "name": data["name"],
-                "picture": data.get("picture")
-            }}
+        except httpx.HTTPStatusError as e:
+            raise HTTPException(
+                status_code=400,
+                detail=f"OAuth demobackend HTTP {e.response.status_code}. Probá iniciar sesión de nuevo.",
+            )
+        except httpx.RequestError as e:
+            raise HTTPException(
+                status_code=400,
+                detail=f"No se pudo contactar al servicio OAuth: {str(e)}",
+            )
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Respuesta OAuth inválida (no es JSON).")
+
+    if not isinstance(data, dict):
+        raise HTTPException(status_code=400, detail="Respuesta OAuth con formato inesperado.")
+
+    required = ("email", "name", "session_token")
+    missing = [k for k in required if data.get(k) in (None, "")]
+    if missing:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Datos de sesión incompletos del proveedor OAuth (faltan: {', '.join(missing)}).",
         )
-    else:
-        user_doc = {
-            "user_id": user_id,
-            "email": data["email"],
-            "name": data["name"],
-            "picture": data.get("picture"),
-            "role": None,
-            "created_at": datetime.now(timezone.utc).isoformat()
-        }
-        await db.users.insert_one(user_doc)
-    
+
     session_token = data["session_token"]
-    expires_at = datetime.now(timezone.utc) + timedelta(days=7)
-    
-    session_doc = {
-        "session_id": str(uuid.uuid4()),
-        "user_id": user_id,
-        "session_token": session_token,
-        "expires_at": expires_at.isoformat(),
-        "created_at": datetime.now(timezone.utc).isoformat()
-    }
-    await db.user_sessions.insert_one(session_doc)
-    
-    user_data = await db.users.find_one({"user_id": user_id}, {"_id": 0})
+    user_id = f"user_{uuid.uuid4().hex[:12]}"
+
+    try:
+        existing_user = await db.users.find_one({"email": data["email"]}, {"_id": 0})
+
+        if existing_user:
+            user_id = existing_user["user_id"]
+            await db.users.update_one(
+                {"user_id": user_id},
+                {
+                    "$set": {
+                        "name": data["name"],
+                        "picture": data.get("picture"),
+                    }
+                },
+            )
+        else:
+            user_doc = {
+                "user_id": user_id,
+                "email": data["email"],
+                "name": data["name"],
+                "picture": data.get("picture"),
+                "role": None,
+                "created_at": datetime.now(timezone.utc).isoformat(),
+            }
+            await db.users.insert_one(user_doc)
+
+        expires_at = datetime.now(timezone.utc) + timedelta(days=7)
+        session_doc = {
+            "session_id": str(uuid.uuid4()),
+            "user_id": user_id,
+            "session_token": session_token,
+            "expires_at": expires_at.isoformat(),
+            "created_at": datetime.now(timezone.utc).isoformat(),
+        }
+        await db.user_sessions.insert_one(session_doc)
+
+        user_data = await db.users.find_one({"user_id": user_id}, {"_id": 0})
+    except PyMongoError as e:
+        log.warning("MongoDB en /auth/session: %s", e)
+        raise HTTPException(
+            status_code=503,
+            detail="No se pudo guardar la sesión: MongoDB no está disponible o MONGO_URL es incorrecta. "
+            "Levantá Mongo (p. ej. docker compose up -d) y reiniciá el backend.",
+        )
+
+    if not user_data:
+        raise HTTPException(status_code=500, detail="Usuario no encontrado tras crear sesión.")
+
     if isinstance(user_data["created_at"], str):
         user_data["created_at"] = datetime.fromisoformat(user_data["created_at"])
-    
-    user_obj = User(**user_data)
-    response = JSONResponse(content=user_obj.model_dump(mode='json'))
+
+    try:
+        user_obj = User(**user_data)
+    except ValidationError as e:
+        log.warning("Validación User en /auth/session: %s", e)
+        raise HTTPException(status_code=422, detail="Datos de usuario inconsistentes en base.")
+
+    payload = user_obj.model_dump(mode="json")
+    payload["session_token"] = session_token
+
+    is_production = os.environ.get("ENVIRONMENT", "development").lower() == "production"
+    response = JSONResponse(content=payload)
     response.set_cookie(
         key="session_token",
         value=session_token,
         httponly=True,
-        secure=True,
-        samesite="none",
+        secure=is_production,
+        samesite="none" if is_production else "lax",
         path="/",
-        max_age=7*24*60*60
+        max_age=7 * 24 * 60 * 60,
     )
     return response
 
@@ -326,10 +401,16 @@ async def get_me_alias(session_token: Optional[str] = Cookie(None), authorizatio
     return current_user
 
 @api_router.post("/auth/logout")
-async def logout(session_token: Optional[str] = Cookie(None)):
-    if session_token:
-        await db.user_sessions.delete_many({"session_token": session_token})
-    
+async def logout(
+    session_token: Optional[str] = Cookie(None),
+    authorization: Optional[str] = Header(None),
+):
+    token = session_token
+    if not token and authorization and authorization.startswith("Bearer "):
+        token = authorization.replace("Bearer ", "", 1)
+    if token:
+        await db.user_sessions.delete_many({"session_token": token})
+
     response = JSONResponse(content={"message": "Sesión cerrada"})
     response.delete_cookie(key="session_token", path="/")
     return response
@@ -897,14 +978,6 @@ app.include_router(api_router)
 uploads_dir = os.path.join(os.path.dirname(__file__), "uploads")
 os.makedirs(uploads_dir, exist_ok=True)
 app.mount("/api/uploads", StaticFiles(directory=uploads_dir), name="uploads")
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_credentials=True,
-    allow_origins=os.environ.get('CORS_ORIGINS', '*').split(','),
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
 
 logging.basicConfig(
     level=logging.INFO,

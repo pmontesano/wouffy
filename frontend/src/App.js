@@ -20,15 +20,18 @@ import CreateWalkerProfile from './pages/CreateWalkerProfile';
 import Account from './pages/Account';
 import MyPets from './pages/MyPets';
 import PetForm from './pages/PetForm';
+import { isOAuthReturnUrl } from './utils/authRedirect';
 
 function AppRouter() {
   const location = useLocation();
 
-  if (location.hash?.includes('session_id=')) {
+  if (isOAuthReturnUrl(location)) {
     return <AuthCallback />;
   }
 
-  const showNavbar = !['/login', '/auth/callback'].includes(location.pathname);
+  const showNavbar = !['/login', '/auth/callback', '/auth', '/select-role'].includes(
+    location.pathname
+  );
 
   return (
     <>
@@ -37,6 +40,7 @@ function AppRouter() {
         <Route path="/" element={<Landing />} />
         <Route path="/login" element={<Login />} />
         <Route path="/auth/callback" element={<AuthCallback />} />
+        <Route path="/auth" element={<AuthCallback />} />
         <Route
           path="/select-role"
           element={

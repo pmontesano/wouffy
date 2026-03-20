@@ -59,7 +59,14 @@ export default function Account() {
       fetchProfile();
     } catch (error) {
       console.error('Error al actualizar perfil:', error);
-      toast.error('Error al actualizar el perfil');
+      const detail = error.response?.data?.detail;
+      toast.error(
+        typeof detail === 'string'
+          ? detail
+          : error.response?.status === 401
+            ? 'Sesión expirada. Iniciá sesión de nuevo.'
+            : 'Error al actualizar el perfil'
+      );
     } finally {
       setSaving(false);
     }
