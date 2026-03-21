@@ -308,18 +308,33 @@ print('Test data cleaned up');
             200
         )
         
-        # Create a walk request
-        if self.test_walker_id:
+        # Create pet + walk request
+        pet_id = None
+        pet_data = {
+            "name": "TestDog",
+            "species": "DOG",
+            "size": "M",
+            "notes": "Very friendly dog",
+        }
+        success, pet_res = self.run_test(
+            "Create pet for walk test",
+            "POST",
+            "me/pets",
+            200,
+            data=pet_data,
+        )
+        if success and pet_res:
+            pet_id = pet_res.get("pet_id")
+
+        if self.test_walker_id and pet_id:
             future_datetime = datetime.now() + timedelta(days=1, hours=2)
             walk_data = {
                 "walker_profile_id": self.test_walker_id,
-                "date_time_start": future_datetime.isoformat(),
-                "duration_minutes": 60,
-                "address_text": "Test Address 123, Buenos Aires",
+                "scheduled_start_at": future_datetime.isoformat(),
+                "estimated_duration_minutes": 60,
+                "start_address_text": "Test Address 123, Buenos Aires",
                 "notes": "Test walk request notes",
-                "pet_name": "TestDog",
-                "pet_size": "M",
-                "pet_notes": "Very friendly dog"
+                "pet_id": pet_id,
             }
             
             success, created_walk = self.run_test(

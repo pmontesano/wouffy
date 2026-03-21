@@ -105,42 +105,55 @@ async def create_demo_users():
     print(f"   Session Token: {walker_session_token}")
     print(f"   Walker Profile ID: demo_walker_profile_001")
     
-    # Crear algunas solicitudes de paseo de demostración
+    # Mascota demo del owner (pet_id estable para seeds)
+    demo_pet_id = "pet_demo_owner_001"
+    await db.pets.delete_many({"pet_id": demo_pet_id})
+    now_iso = datetime.now(timezone.utc).isoformat()
+    pet_doc = {
+        "pet_id": demo_pet_id,
+        "owner_user_id": owner_user_id,
+        "name": "Rocky",
+        "species": "DOG",
+        "size": "M",
+        "notes": "Muy juguetón y sociable",
+        "created_at": now_iso,
+        "updated_at": now_iso,
+    }
+    await db.pets.insert_one(pet_doc)
+
+    await db.walks.delete_many({"owner_user_id": owner_user_id})
+
     walk_1 = {
         "walk_id": f"walk_demo_{uuid.uuid4().hex[:12]}",
         "owner_user_id": owner_user_id,
-        "walker_profile_id": "walker_001",  # María González del seed
-        "pet_name": "Rocky",
-        "pet_size": "M",
-        "pet_notes": "Muy juguetón y sociable",
-        "date_time_start": (datetime.now(timezone.utc) + timedelta(days=2)).isoformat(),
-        "duration_minutes": 60,
-        "address_text": "Av. Santa Fe 1234, Palermo",
+        "walker_profile_id": "walker_001",
+        "pet_id": demo_pet_id,
+        "scheduled_start_at": (datetime.now(timezone.utc) + timedelta(days=2)).isoformat(),
+        "estimated_duration_minutes": 60,
+        "start_address_text": "Av. Santa Fe 1234, Palermo",
         "notes": "Preferiblemente por la tarde",
         "status": "REQUESTED",
-        "created_at": datetime.now(timezone.utc).isoformat(),
-        "updated_at": datetime.now(timezone.utc).isoformat()
+        "created_at": now_iso,
+        "updated_at": now_iso
     }
     await db.walks.insert_one(walk_1)
     
     walk_2 = {
         "walk_id": f"walk_demo_{uuid.uuid4().hex[:12]}",
-        "owner_user_id": "user_walker_002",  # Otro owner mock
+        "owner_user_id": owner_user_id,
         "walker_profile_id": "demo_walker_profile_001",
-        "pet_name": "Luna",
-        "pet_size": "S",
-        "pet_notes": "Tímida con otros perros",
-        "date_time_start": (datetime.now(timezone.utc) + timedelta(days=1)).isoformat(),
-        "duration_minutes": 30,
-        "address_text": "Av. Libertador 5678, Belgrano",
+        "pet_id": demo_pet_id,
+        "scheduled_start_at": (datetime.now(timezone.utc) + timedelta(days=1)).isoformat(),
+        "estimated_duration_minutes": 30,
+        "start_address_text": "Av. Libertador 5678, Belgrano",
         "notes": "Por favor traer correa corta",
         "status": "REQUESTED",
-        "created_at": datetime.now(timezone.utc).isoformat(),
-        "updated_at": datetime.now(timezone.utc).isoformat()
+        "created_at": now_iso,
+        "updated_at": now_iso
     }
     await db.walks.insert_one(walk_2)
     
-    print(f"✅ 2 solicitudes de paseo de demostración creadas")
+    print(f"✅ 2 solicitudes de paseo de demostración creadas (con pet_id y scheduled_start_at)")
     
     print("\n" + "="*60)
     print("📋 INSTRUCCIONES PARA TESTING:")

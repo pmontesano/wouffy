@@ -123,11 +123,11 @@ export default function CreateWalkRequest() {
     try {
       const walkData = {
         walker_profile_id: walkerId,
-        date_time_start: dateTimeStart.toISOString(),
-        estimated_duration_minutes: parseInt(formData.duration),
+        scheduled_start_at: dateTimeStart.toISOString(),
+        estimated_duration_minutes: parseInt(formData.duration, 10),
         start_address_text: formData.address,
-        notes: formData.notes,
-        pet_id: formData.petId
+        notes: formData.notes || undefined,
+        pet_id: formData.petId,
       };
 
       await api.post('/walks', walkData);

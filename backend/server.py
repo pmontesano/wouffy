@@ -1,4 +1,4 @@
-from fastapi import FastAPI, APIRouter, HTTPException, Cookie, Header, Depends, UploadFile, File
+from fastapi import FastAPI, APIRouter, HTTPException, Cookie, Header, Depends, UploadFile, File, Body
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from dotenv import load_dotenv
@@ -7,8 +7,8 @@ from motor.motor_asyncio import AsyncIOMotorClient
 import os
 import logging
 from pathlib import Path
-from pydantic import BaseModel, Field, ConfigDict, ValidationError
-from typing import List, Optional
+from pydantic import BaseModel, Field, ConfigDict, ValidationError, model_validator
+from typing import List, Optional, Any
 import uuid
 from datetime import datetime, timezone, timedelta
 import httpx
@@ -16,6 +16,16 @@ from enum import Enum
 
 import shutil
 from pymongo.errors import PyMongoError
+
+from services.walk_service import (
+    assert_walk_status,
+    assert_walker_assigned,
+    can_owner_cancel,
+    create_walk_event,
+    event_to_timeline_item,
+    get_walk_for_authenticated_user,
+    walk_doc_for_model,
+)
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / ".env")
@@ -186,32 +196,44 @@ class Pet(BaseModel):
     created_at: datetime
 
 class Walk(BaseModel):
+    """Unificado: scheduled_start_at; campos legacy en DB se ignoran al validar."""
+
     model_config = ConfigDict(extra="ignore")
     walk_id: str = Field(default_factory=lambda: f"walk_{uuid.uuid4().hex[:12]}")
     owner_user_id: str
-    walker_user_id: Optional[str] = None
-    walker_profile_id: str
+    walker_profile_id: Optional[str] = None
     pet_id: str
-    pet_name: Optional[str] = None
-    pet_size: Optional[PetSize] = None
-    pet_notes: Optional[str] = None
-    date_time_start: datetime
-    estimated_duration_minutes: int
+    status: WalkStatus = WalkStatus.REQUESTED
+    scheduled_start_at: datetime
     actual_start_at: Optional[datetime] = None
     actual_end_at: Optional[datetime] = None
-    start_address_text: str
     notes: Optional[str] = None
-    status: WalkStatus = WalkStatus.REQUESTED
     created_at: datetime
     updated_at: datetime
 
+
 class WalkCreate(BaseModel):
+    model_config = ConfigDict(extra="ignore")
     pet_id: str
     walker_profile_id: str
-    date_time_start: datetime
-    estimated_duration_minutes: int
-    start_address_text: str
+    scheduled_start_at: Optional[datetime] = None
     notes: Optional[str] = None
+    estimated_duration_minutes: Optional[int] = None
+    start_address_text: Optional[str] = None
+
+    @model_validator(mode="before")
+    @classmethod
+    def legacy_scheduled_start(cls, data: Any) -> Any:
+        if isinstance(data, dict):
+            if data.get("scheduled_start_at") is None and data.get("date_time_start") is not None:
+                return {**data, "scheduled_start_at": data["date_time_start"]}
+        return data
+
+    @model_validator(mode="after")
+    def scheduled_start_required(self) -> "WalkCreate":
+        if self.scheduled_start_at is None:
+            raise ValueError("scheduled_start_at es requerido")
+        return self
 
 class WalkLocationPoint(BaseModel):
     model_config = ConfigDict(extra="ignore")
@@ -225,13 +247,28 @@ class WalkLocationCreate(BaseModel):
     latitude: float
     longitude: float
 
-class WalkEvent(BaseModel):
-    model_config = ConfigDict(extra="ignore")
-    event_id: str = Field(default_factory=lambda: f"event_{uuid.uuid4().hex[:12]}")
-    walk_id: str
-    type: str  # REQUESTED, ACCEPTED, WALKER_ON_THE_WAY, ARRIVED, STARTED, COMPLETED, CANCELLED
-    message: Optional[str] = None
-    created_at: datetime
+class WalkListItem(BaseModel):
+    walk: Walk
+    pet: Optional[PetModel] = None
+    estimated_duration_minutes: Optional[int] = None
+    start_address_text: Optional[str] = None
+
+
+class WalkDetailResponse(BaseModel):
+    walk: Walk
+    pet: PetModel
+    walker: Optional[WalkerProfile] = None
+
+
+class WalkTransitionBody(BaseModel):
+    notes: Optional[str] = None
+
+
+class WalkTimelineEventItem(BaseModel):
+    event_type: str
+    created_at: str
+    metadata: dict
+
 
 class RoleUpdate(BaseModel):
     role: UserRole
@@ -793,184 +830,410 @@ async def update_walker_profile(profile: WalkerProfileCreate, current_user: User
     
     return WalkerProfile(**walker)
 
-# Helper function para crear eventos de paseo
-async def create_walk_event(walk_id: str, event_type: str, message: Optional[str] = None):
-    event_doc = {
-        "event_id": f"event_{uuid.uuid4().hex[:12]}",
-        "walk_id": walk_id,
-        "type": event_type,
-        "message": message,
-        "created_at": datetime.now(timezone.utc).isoformat()
-    }
-    await db.walk_events.insert_one(event_doc)
+def _walk_from_doc(doc: dict) -> Walk:
+    return Walk(**walk_doc_for_model(doc))
+
+
+def _pet_model_from_doc(pet_doc: dict) -> PetModel:
+    pd = dict(pet_doc)
+    for k in ("created_at", "updated_at"):
+        if isinstance(pd.get(k), str):
+            pd[k] = datetime.fromisoformat(pd[k].replace("Z", "+00:00"))
+    return PetModel(**pd)
+
+
+def _walker_profile_from_doc(w: dict) -> WalkerProfile:
+    wd = dict(w)
+    for k in ("created_at", "updated_at"):
+        if isinstance(wd.get(k), str):
+            wd[k] = datetime.fromisoformat(wd[k].replace("Z", "+00:00"))
+    return WalkerProfile(**wd)
+
+
+async def _build_walk_list_items(walks_raw: List[dict]) -> List[WalkListItem]:
+    if not walks_raw:
+        return []
+    pet_ids = list({w["pet_id"] for w in walks_raw if w.get("pet_id")})
+    pets = await db.pets.find({"pet_id": {"$in": pet_ids}}, {"_id": 0}).to_list(200)
+    pet_map = {p["pet_id"]: p for p in pets}
+    items: List[WalkListItem] = []
+    for raw in walks_raw:
+        walk = _walk_from_doc(raw)
+        pet_doc = pet_map.get(raw.get("pet_id"))
+        pet = _pet_model_from_doc(pet_doc) if pet_doc else None
+        items.append(
+            WalkListItem(
+                walk=walk,
+                pet=pet,
+                estimated_duration_minutes=raw.get("estimated_duration_minutes")
+                or raw.get("duration_minutes"),
+                start_address_text=raw.get("start_address_text")
+                or raw.get("address_text"),
+            )
+        )
+    return items
+
+
+def _transition_metadata(body: WalkTransitionBody) -> dict:
+    meta: dict = {}
+    if body.notes:
+        meta["notes"] = body.notes
+    return meta
+
 
 # Walk Endpoints
 @api_router.post("/walks", response_model=Walk)
 async def create_walk(walk_create: WalkCreate, current_user: User = Depends(get_current_user)):
     if current_user.role != UserRole.OWNER:
         raise HTTPException(status_code=403, detail="Solo usuarios con rol OWNER pueden crear solicitudes de paseo")
-    
-    # Fetch pet details
+
     pet = await db.pets.find_one({"pet_id": walk_create.pet_id, "owner_user_id": current_user.user_id}, {"_id": 0})
     if not pet:
         raise HTTPException(status_code=404, detail="Mascota no encontrada")
 
-    walk_doc = {
+    walker = await db.walker_profiles.find_one({"walker_id": walk_create.walker_profile_id}, {"_id": 0})
+    if not walker:
+        raise HTTPException(status_code=404, detail="Paseador no encontrado")
+
+    now = datetime.now(timezone.utc).isoformat()
+    ssa = walk_create.scheduled_start_at
+    ssa_iso = ssa.isoformat() if isinstance(ssa, datetime) else str(ssa)
+
+    walk_doc: dict = {
         "walk_id": f"walk_{uuid.uuid4().hex[:12]}",
         "owner_user_id": current_user.user_id,
-        **walk_create.model_dump(),
-        "pet_name": pet["name"],
-        "pet_size": pet["size"],
-        "pet_notes": pet.get("notes"),
+        "pet_id": walk_create.pet_id,
+        "walker_profile_id": walk_create.walker_profile_id,
+        "scheduled_start_at": ssa_iso,
+        "notes": walk_create.notes,
         "status": WalkStatus.REQUESTED.value,
-        "created_at": datetime.now(timezone.utc).isoformat(),
-        "updated_at": datetime.now(timezone.utc).isoformat()
+        "created_at": now,
+        "updated_at": now,
     }
-    
-    if isinstance(walk_doc["date_time_start"], datetime):
-        walk_doc["date_time_start"] = walk_doc["date_time_start"].isoformat()
-    
-    await db.walks.insert_one(walk_doc)
-    
-    walk = await db.walks.find_one({"walk_id": walk_doc["walk_id"]}, {"_id": 0})
-    if isinstance(walk["date_time_start"], str):
-        walk["date_time_start"] = datetime.fromisoformat(walk["date_time_start"])
-    if isinstance(walk["created_at"], str):
-        walk["created_at"] = datetime.fromisoformat(walk["created_at"])
-    if isinstance(walk["updated_at"], str):
-        walk["updated_at"] = datetime.fromisoformat(walk["updated_at"])
-    
-    return Walk(**walk)
+    if walk_create.estimated_duration_minutes is not None:
+        walk_doc["estimated_duration_minutes"] = walk_create.estimated_duration_minutes
+    if walk_create.start_address_text is not None:
+        walk_doc["start_address_text"] = walk_create.start_address_text
 
-@api_router.get("/walks/me", response_model=List[Walk])
+    await db.walks.insert_one(walk_doc)
+
+    await create_walk_event(db, walk_doc["walk_id"], "walk_requested", actor="OWNER")
+
+    walk = await db.walks.find_one({"walk_id": walk_doc["walk_id"]}, {"_id": 0})
+    return _walk_from_doc(walk)
+
+
+@api_router.get("/walks/me", response_model=List[WalkListItem])
 async def get_my_walks(current_user: User = Depends(get_current_user)):
     if current_user.role != UserRole.OWNER:
         raise HTTPException(status_code=403, detail="Solo usuarios con rol OWNER pueden ver sus solicitudes")
-    
-    walks = await db.walks.find({"owner_user_id": current_user.user_id}, {"_id": 0}).to_list(100)
-    
-    for walk in walks:
-        if isinstance(walk["date_time_start"], str):
-            walk["date_time_start"] = datetime.fromisoformat(walk["date_time_start"])
-        if isinstance(walk["created_at"], str):
-            walk["created_at"] = datetime.fromisoformat(walk["created_at"])
-        if isinstance(walk["updated_at"], str):
-            walk["updated_at"] = datetime.fromisoformat(walk["updated_at"])
-    
-    return walks
 
-@api_router.get("/walks/incoming", response_model=List[Walk])
+    walks = await db.walks.find({"owner_user_id": current_user.user_id}, {"_id": 0}).to_list(100)
+    return await _build_walk_list_items(walks)
+
+
+@api_router.get("/walks/incoming", response_model=List[WalkListItem])
 async def get_incoming_walks(current_user: User = Depends(get_current_user)):
     if current_user.role != UserRole.WALKER:
         raise HTTPException(status_code=403, detail="Solo usuarios con rol WALKER pueden ver solicitudes entrantes")
-    
+
     walker_profile = await db.walker_profiles.find_one({"user_id": current_user.user_id}, {"_id": 0})
     if not walker_profile:
         return []
-    
+
     walks = await db.walks.find({"walker_profile_id": walker_profile["walker_id"]}, {"_id": 0}).to_list(100)
-    
-    for walk in walks:
-        if isinstance(walk["date_time_start"], str):
-            walk["date_time_start"] = datetime.fromisoformat(walk["date_time_start"])
-        if isinstance(walk["created_at"], str):
-            walk["created_at"] = datetime.fromisoformat(walk["created_at"])
-        if isinstance(walk["updated_at"], str):
-            walk["updated_at"] = datetime.fromisoformat(walk["updated_at"])
-    
-    return walks
+    return await _build_walk_list_items(walks)
+
+
+@api_router.get("/walks/{walk_id}/events", response_model=List[WalkTimelineEventItem])
+async def get_walk_events(walk_id: str, current_user: User = Depends(get_current_user)):
+    role = current_user.role.value if current_user.role else ""
+    wp = None
+    if current_user.role == UserRole.WALKER:
+        prof = await db.walker_profiles.find_one({"user_id": current_user.user_id}, {"_id": 0})
+        wp = prof["walker_id"] if prof else None
+
+    walk_doc = await get_walk_for_authenticated_user(
+        db, walk_id, user_id=current_user.user_id, role=role, walker_profile_id=wp
+    )
+    if not walk_doc:
+        raise HTTPException(status_code=404, detail="Solicitud de paseo no encontrada")
+
+    events = (
+        await db.walk_events.find({"walk_id": walk_id}, {"_id": 0})
+        .sort("created_at", 1)
+        .to_list(500)
+    )
+    out: List[WalkTimelineEventItem] = []
+    for ev in events:
+        item = event_to_timeline_item(ev)
+        out.append(WalkTimelineEventItem(**item))
+    return out
+
+
+@api_router.get("/walks/{walk_id}", response_model=WalkDetailResponse)
+async def get_walk_detail(walk_id: str, current_user: User = Depends(get_current_user)):
+    role = current_user.role.value if current_user.role else ""
+    wp = None
+    if current_user.role == UserRole.WALKER:
+        prof = await db.walker_profiles.find_one({"user_id": current_user.user_id}, {"_id": 0})
+        wp = prof["walker_id"] if prof else None
+
+    walk_doc = await get_walk_for_authenticated_user(
+        db, walk_id, user_id=current_user.user_id, role=role, walker_profile_id=wp
+    )
+    if not walk_doc:
+        raise HTTPException(status_code=404, detail="Solicitud de paseo no encontrada")
+
+    pet_doc = await db.pets.find_one({"pet_id": walk_doc["pet_id"]}, {"_id": 0})
+    if not pet_doc:
+        raise HTTPException(status_code=404, detail="Mascota no encontrada")
+
+    walker_doc = None
+    wpid = walk_doc.get("walker_profile_id")
+    if wpid:
+        walker_doc = await db.walker_profiles.find_one({"walker_id": wpid}, {"_id": 0})
+
+    return WalkDetailResponse(
+        walk=_walk_from_doc(walk_doc),
+        pet=_pet_model_from_doc(pet_doc),
+        walker=_walker_profile_from_doc(walker_doc) if walker_doc else None,
+    )
+
 
 @api_router.patch("/walks/{walk_id}/accept", response_model=Walk)
-async def accept_walk(walk_id: str, current_user: User = None):
-    current_user = await get_current_user()
-    
+async def accept_walk(walk_id: str, current_user: User = Depends(get_current_user)):
     if current_user.role != UserRole.WALKER:
         raise HTTPException(status_code=403, detail="Solo usuarios con rol WALKER pueden aceptar solicitudes")
-    
+
     walker_profile = await db.walker_profiles.find_one({"user_id": current_user.user_id}, {"_id": 0})
     if not walker_profile:
         raise HTTPException(status_code=404, detail="Perfil de paseador no encontrado")
-    
+
     walk = await db.walks.find_one({"walk_id": walk_id, "walker_profile_id": walker_profile["walker_id"]}, {"_id": 0})
     if not walk:
         raise HTTPException(status_code=404, detail="Solicitud de paseo no encontrada")
-    
-    if walk["status"] != WalkStatus.REQUESTED.value:
-        raise HTTPException(status_code=400, detail="Solo se pueden aceptar solicitudes en estado REQUESTED")
-    
+
+    assert_walk_status(walk, WalkStatus.REQUESTED.value)
+
     await db.walks.update_one(
         {"walk_id": walk_id},
-        {"$set": {"status": WalkStatus.ACCEPTED.value, "updated_at": datetime.now(timezone.utc).isoformat()}}
+        {"$set": {"status": WalkStatus.ACCEPTED.value, "updated_at": datetime.now(timezone.utc).isoformat()}},
     )
-    
+    await create_walk_event(db, walk_id, "walk_accepted", actor="WALKER")
+
     updated_walk = await db.walks.find_one({"walk_id": walk_id}, {"_id": 0})
-    if isinstance(updated_walk["date_time_start"], str):
-        updated_walk["date_time_start"] = datetime.fromisoformat(updated_walk["date_time_start"])
-    if isinstance(updated_walk["created_at"], str):
-        updated_walk["created_at"] = datetime.fromisoformat(updated_walk["created_at"])
-    if isinstance(updated_walk["updated_at"], str):
-        updated_walk["updated_at"] = datetime.fromisoformat(updated_walk["updated_at"])
-    
-    return Walk(**updated_walk)
+    return _walk_from_doc(updated_walk)
+
 
 @api_router.patch("/walks/{walk_id}/reject", response_model=Walk)
-async def reject_walk(walk_id: str, current_user: User = None):
-    current_user = await get_current_user()
-    
+async def reject_walk(walk_id: str, current_user: User = Depends(get_current_user)):
     if current_user.role != UserRole.WALKER:
         raise HTTPException(status_code=403, detail="Solo usuarios con rol WALKER pueden rechazar solicitudes")
-    
+
     walker_profile = await db.walker_profiles.find_one({"user_id": current_user.user_id}, {"_id": 0})
     if not walker_profile:
         raise HTTPException(status_code=404, detail="Perfil de paseador no encontrado")
-    
+
     walk = await db.walks.find_one({"walk_id": walk_id, "walker_profile_id": walker_profile["walker_id"]}, {"_id": 0})
     if not walk:
         raise HTTPException(status_code=404, detail="Solicitud de paseo no encontrada")
-    
-    if walk["status"] != WalkStatus.REQUESTED.value:
-        raise HTTPException(status_code=400, detail="Solo se pueden rechazar solicitudes en estado REQUESTED")
-    
+
+    assert_walk_status(walk, WalkStatus.REQUESTED.value)
+
     await db.walks.update_one(
         {"walk_id": walk_id},
-        {"$set": {"status": WalkStatus.REJECTED.value, "updated_at": datetime.now(timezone.utc).isoformat()}}
+        {"$set": {"status": WalkStatus.REJECTED.value, "updated_at": datetime.now(timezone.utc).isoformat()}},
     )
-    
+    await create_walk_event(db, walk_id, "walk_rejected", actor="WALKER")
+
     updated_walk = await db.walks.find_one({"walk_id": walk_id}, {"_id": 0})
-    if isinstance(updated_walk["date_time_start"], str):
-        updated_walk["date_time_start"] = datetime.fromisoformat(updated_walk["date_time_start"])
-    if isinstance(updated_walk["created_at"], str):
-        updated_walk["created_at"] = datetime.fromisoformat(updated_walk["created_at"])
-    if isinstance(updated_walk["updated_at"], str):
-        updated_walk["updated_at"] = datetime.fromisoformat(updated_walk["updated_at"])
-    
-    return Walk(**updated_walk)
+    return _walk_from_doc(updated_walk)
+
 
 @api_router.patch("/walks/{walk_id}/cancel", response_model=Walk)
-async def cancel_walk(walk_id: str, current_user: User = None):
-    current_user = await get_current_user()
-    
+async def cancel_walk(walk_id: str, current_user: User = Depends(get_current_user)):
     if current_user.role != UserRole.OWNER:
         raise HTTPException(status_code=403, detail="Solo usuarios con rol OWNER pueden cancelar solicitudes")
-    
+
     walk = await db.walks.find_one({"walk_id": walk_id, "owner_user_id": current_user.user_id}, {"_id": 0})
     if not walk:
         raise HTTPException(status_code=404, detail="Solicitud de paseo no encontrada")
-    
+
+    if not can_owner_cancel(walk["status"]):
+        raise HTTPException(
+            status_code=400,
+            detail="Solo se puede cancelar en estado REQUESTED o ACCEPTED",
+        )
+
     await db.walks.update_one(
         {"walk_id": walk_id},
-        {"$set": {"status": WalkStatus.CANCELLED.value, "updated_at": datetime.now(timezone.utc).isoformat()}}
+        {"$set": {"status": WalkStatus.CANCELLED.value, "updated_at": datetime.now(timezone.utc).isoformat()}},
     )
-    
+    await create_walk_event(db, walk_id, "walk_cancelled", actor="OWNER")
+
     updated_walk = await db.walks.find_one({"walk_id": walk_id}, {"_id": 0})
-    if isinstance(updated_walk["date_time_start"], str):
-        updated_walk["date_time_start"] = datetime.fromisoformat(updated_walk["date_time_start"])
-    if isinstance(updated_walk["created_at"], str):
-        updated_walk["created_at"] = datetime.fromisoformat(updated_walk["created_at"])
-    if isinstance(updated_walk["updated_at"], str):
-        updated_walk["updated_at"] = datetime.fromisoformat(updated_walk["updated_at"])
-    
-    return Walk(**updated_walk)
+    return _walk_from_doc(updated_walk)
+
+
+@api_router.patch("/walks/{walk_id}/on-the-way", response_model=Walk)
+async def walk_on_the_way(
+    walk_id: str,
+    body: Optional[WalkTransitionBody] = Body(default=None),
+    current_user: User = Depends(get_current_user),
+):
+    if current_user.role != UserRole.WALKER:
+        raise HTTPException(status_code=403, detail="Solo el paseador asignado puede actualizar el estado")
+
+    walker_profile = await db.walker_profiles.find_one({"user_id": current_user.user_id}, {"_id": 0})
+    if not walker_profile:
+        raise HTTPException(status_code=404, detail="Perfil de paseador no encontrado")
+
+    walk = await db.walks.find_one({"walk_id": walk_id}, {"_id": 0})
+    if not walk:
+        raise HTTPException(status_code=404, detail="Solicitud de paseo no encontrada")
+    assert_walker_assigned(walk, walker_profile["walker_id"])
+    assert_walk_status(walk, WalkStatus.ACCEPTED.value)
+
+    if body is None:
+        body = WalkTransitionBody()
+
+    await db.walks.update_one(
+        {"walk_id": walk_id},
+        {"$set": {"status": WalkStatus.WALKER_ON_THE_WAY.value, "updated_at": datetime.now(timezone.utc).isoformat()}},
+    )
+    await create_walk_event(
+        db,
+        walk_id,
+        "walker_on_the_way",
+        _transition_metadata(body),
+        actor="WALKER",
+    )
+
+    updated_walk = await db.walks.find_one({"walk_id": walk_id}, {"_id": 0})
+    return _walk_from_doc(updated_walk)
+
+
+@api_router.patch("/walks/{walk_id}/arrived", response_model=Walk)
+async def walk_arrived(
+    walk_id: str,
+    body: Optional[WalkTransitionBody] = Body(default=None),
+    current_user: User = Depends(get_current_user),
+):
+    if current_user.role != UserRole.WALKER:
+        raise HTTPException(status_code=403, detail="Solo el paseador asignado puede actualizar el estado")
+
+    walker_profile = await db.walker_profiles.find_one({"user_id": current_user.user_id}, {"_id": 0})
+    if not walker_profile:
+        raise HTTPException(status_code=404, detail="Perfil de paseador no encontrado")
+
+    walk = await db.walks.find_one({"walk_id": walk_id}, {"_id": 0})
+    if not walk:
+        raise HTTPException(status_code=404, detail="Solicitud de paseo no encontrada")
+    assert_walker_assigned(walk, walker_profile["walker_id"])
+    assert_walk_status(walk, WalkStatus.WALKER_ON_THE_WAY.value)
+
+    if body is None:
+        body = WalkTransitionBody()
+
+    await db.walks.update_one(
+        {"walk_id": walk_id},
+        {"$set": {"status": WalkStatus.ARRIVED.value, "updated_at": datetime.now(timezone.utc).isoformat()}},
+    )
+    await create_walk_event(
+        db,
+        walk_id,
+        "walker_arrived",
+        _transition_metadata(body),
+        actor="WALKER",
+    )
+
+    updated_walk = await db.walks.find_one({"walk_id": walk_id}, {"_id": 0})
+    return _walk_from_doc(updated_walk)
+
+
+@api_router.patch("/walks/{walk_id}/start", response_model=Walk)
+async def walk_start(
+    walk_id: str,
+    body: Optional[WalkTransitionBody] = Body(default=None),
+    current_user: User = Depends(get_current_user),
+):
+    if current_user.role != UserRole.WALKER:
+        raise HTTPException(status_code=403, detail="Solo el paseador asignado puede iniciar el paseo")
+
+    walker_profile = await db.walker_profiles.find_one({"user_id": current_user.user_id}, {"_id": 0})
+    if not walker_profile:
+        raise HTTPException(status_code=404, detail="Perfil de paseador no encontrado")
+
+    walk = await db.walks.find_one({"walk_id": walk_id}, {"_id": 0})
+    if not walk:
+        raise HTTPException(status_code=404, detail="Solicitud de paseo no encontrada")
+    assert_walker_assigned(walk, walker_profile["walker_id"])
+    assert_walk_status(walk, WalkStatus.ARRIVED.value)
+
+    if body is None:
+        body = WalkTransitionBody()
+
+    now = datetime.now(timezone.utc).isoformat()
+    await db.walks.update_one(
+        {"walk_id": walk_id},
+        {
+            "$set": {
+                "status": WalkStatus.IN_PROGRESS.value,
+                "actual_start_at": now,
+                "updated_at": now,
+            }
+        },
+    )
+    await create_walk_event(
+        db,
+        walk_id,
+        "walk_started",
+        _transition_metadata(body),
+        actor="WALKER",
+    )
+
+    updated_walk = await db.walks.find_one({"walk_id": walk_id}, {"_id": 0})
+    return _walk_from_doc(updated_walk)
+
+
+@api_router.patch("/walks/{walk_id}/complete", response_model=Walk)
+async def walk_complete(
+    walk_id: str,
+    body: Optional[WalkTransitionBody] = Body(default=None),
+    current_user: User = Depends(get_current_user),
+):
+    if current_user.role != UserRole.WALKER:
+        raise HTTPException(status_code=403, detail="Solo el paseador asignado puede finalizar el paseo")
+
+    walker_profile = await db.walker_profiles.find_one({"user_id": current_user.user_id}, {"_id": 0})
+    if not walker_profile:
+        raise HTTPException(status_code=404, detail="Perfil de paseador no encontrado")
+
+    walk = await db.walks.find_one({"walk_id": walk_id}, {"_id": 0})
+    if not walk:
+        raise HTTPException(status_code=404, detail="Solicitud de paseo no encontrada")
+    assert_walker_assigned(walk, walker_profile["walker_id"])
+    assert_walk_status(walk, WalkStatus.IN_PROGRESS.value)
+
+    if body is None:
+        body = WalkTransitionBody()
+
+    now = datetime.now(timezone.utc).isoformat()
+    await db.walks.update_one(
+        {"walk_id": walk_id},
+        {"$set": {"status": WalkStatus.COMPLETED.value, "actual_end_at": now, "updated_at": now}},
+    )
+    await create_walk_event(
+        db,
+        walk_id,
+        "walk_completed",
+        _transition_metadata(body),
+        actor="WALKER",
+    )
+
+    updated_walk = await db.walks.find_one({"walk_id": walk_id}, {"_id": 0})
+    return _walk_from_doc(updated_walk)
 
 app.include_router(api_router)
 

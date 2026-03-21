@@ -94,7 +94,7 @@ yarn install
 cp .env.example .env
 ```
 
-En **desarrollo** (`yarn start`) las llamadas van a **`/api`** en el mismo origen (`localhost:3000`) y Create React App las **proxifica** al backend (`package.json` → `"proxy": "http://127.0.0.1:8000"`). Así **no hay CORS** entre puertos. No necesitás `REACT_APP_BACKEND_URL` en local.
+En **desarrollo** (`yarn start`) las llamadas van a **`/api`** en el mismo origen (`localhost:3000`) y el archivo **`frontend/src/setupProxy.js`** reenvía todo `/api/*` a FastAPI en **`http://127.0.0.1:8000`** (incluye GET, PATCH, PUT, DELETE). Así **no hay CORS** entre puertos. No necesitás `REACT_APP_BACKEND_URL` en local. Opcional: `REACT_APP_PROXY_TARGET` si el backend corre en otro host/puerto.
 
 En **producción** (`yarn build`), definí `REACT_APP_BACKEND_URL` con la URL pública del API (sin barra final).
 
@@ -111,7 +111,23 @@ La app abre en **`http://localhost:3000`** (puerto típico de Create React App).
 1. Arrancá **MongoDB**.
 2. En una terminal: backend (`uvicorn` como arriba).
 3. En otra terminal: frontend (`yarn start`).
-4. Abrí el navegador en `http://localhost:3000`.
+4. En **`frontend/`**: `yarn install` (necesario si se añadieron dependencias como `http-proxy-middleware` para el proxy).
+5. Abrí el navegador en `http://localhost:3000`.
+
+### Datos en MongoDB (local vs producción)
+
+- **Producción** ya tiene usuarios y paseadores en la base remota.
+- **Local** empezás con una base **vacía** (o solo lo que generó tu login). Por eso **`GET /api/walkers` puede devolver `[]`**: no hay documentos en la colección `walker_profiles` hasta que cargues datos de prueba.
+
+Para insertar **paseadores demo** (misma lista que usa `seed_data.py`):
+
+```bash
+cd backend
+source .venv/bin/activate   # Windows: .venv\Scripts\activate
+python seed_data.py
+```
+
+Reiniciá el frontend si cambiaste dependencias; el backend puede seguir en marcha.
 
 ### Autenticación en desarrollo
 
@@ -130,6 +146,7 @@ Las peticiones Axios usan `withCredentials: true` y el origen del frontend debe 
 
 | Ubicación | Comando | Descripción |
 |-----------|---------|-------------|
+| `backend/` | `python seed_data.py` | Inserta paseadores demo en MongoDB (local) |
 | `frontend/` | `yarn start` | Servidor de desarrollo (CRACO) |
 | `frontend/` | `yarn build` | Build de producción |
 | `frontend/` | `yarn test` | Tests (Jest / CRA) |
