@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from typing import Any, Dict, Optional
 
 from fastapi import HTTPException
@@ -135,3 +135,80 @@ def assert_walk_status(walk: Dict[str, Any], expected: str) -> None:
 
 def can_owner_cancel(status: str) -> bool:
     return status in ("REQUESTED", "ACCEPTED")
+
+
+def get_walk_duration_minutes(doc: Dict[str, Any]) -> int:
+    v = doc.get("estimated_duration_minutes") or doc.get("duration_minutes")
+    if v is None:
+        return 60
+    try:
+        return max(1, int(v))
+    except (TypeError, ValueError):
+        return 60
+
+
+def compute_expected_walk_end(doc: Dict[str, Any]) -> Optional[datetime]:
+    """Fin esperado del paseo: actual_start + duración, o scheduled + duración."""
+    duration = get_walk_duration_minutes(doc)
+    actual_start = parse_datetime_value(doc.get("actual_start_at"))
+    scheduled = parse_datetime_value(doc.get("scheduled_start_at")) or parse_datetime_value(
+        doc.get("date_time_start")
+    )
+    if actual_start:
+        if actual_start.tzinfo is None:
+            actual_start = actual_start.replace(tzinfo=timezone.utc)
+        return actual_start + timedelta(minutes=duration)
+    if scheduled:
+        if scheduled.tzinfo is None:
+            scheduled = scheduled.replace(tzinfo=timezone.utc)
+        return scheduled + timedelta(minutes=duration)
+    return None
+
+
+async def maybe_finalize_stale_walk(
+    db: AsyncIOMotorDatabase, walk_doc: Dict[str, Any]
+) -> Dict[str, Any]:
+    """
+    Si el paseo sigue IN_PROGRESS pero ya pasó la ventana (inicio + duración + gracia),
+    lo marca COMPLETED con finalization_source=SYSTEM y actual_end_at en el fin esperado.
+    """
+    if walk_doc.get("status") != "IN_PROGRESS":
+        return walk_doc
+
+    expected_end = compute_expected_walk_end(walk_doc)
+    if expected_end is None:
+        return walk_doc
+
+    now = datetime.now(timezone.utc)
+    grace = timedelta(minutes=5)
+    if now <= expected_end + grace:
+        return walk_doc
+
+    walk_id = walk_doc["walk_id"]
+    end_iso = expected_end.isoformat()
+    now_iso = now.isoformat()
+
+    await db.walks.update_one(
+        {"walk_id": walk_id},
+        {
+            "$set": {
+                "status": "COMPLETED",
+                "actual_end_at": end_iso,
+                "updated_at": now_iso,
+                "finalization_source": "SYSTEM",
+            }
+        },
+    )
+    await create_walk_event(
+        db,
+        walk_id,
+        "walk_finalized",
+        {
+            "reason": "stale_in_progress_timeout",
+            "expected_end_at": end_iso,
+            "detected_at": now_iso,
+        },
+        actor="SYSTEM",
+    )
+    updated = await db.walks.find_one({"walk_id": walk_id}, {"_id": 0})
+    return updated if updated else walk_doc

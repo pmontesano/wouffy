@@ -90,3 +90,9 @@
   background: #DBEAFE;
   color: #1E40AF;
 }
+
+/* Cerrado por tiempo (API: finalization_source SYSTEM) */
+.status-finalized {
+  background: #E2E8F0;
+  color: #334155;
+}

@@ -96,7 +96,14 @@ api.interceptors.response.use(
   },
 );
 
-export const getWalkStatusLabel = (status) => {
+/**
+ * @param {string} status
+ * @param {object} [walk] - objeto walk del API (usa finalization_source)
+ */
+export const getWalkStatusLabel = (status, walk = null) => {
+  if (status === "COMPLETED" && walk?.finalization_source === "SYSTEM") {
+    return "Paseo finalizado";
+  }
   const labels = {
     REQUESTED: "Solicitado",
     ACCEPTED: "Aceptado",
@@ -110,7 +117,10 @@ export const getWalkStatusLabel = (status) => {
   return labels[status] || status;
 };
 
-export const getWalkStatusClass = (status) => {
+export const getWalkStatusClass = (status, walk = null) => {
+  if (status === "COMPLETED" && walk?.finalization_source === "SYSTEM") {
+    return "status-finalized";
+  }
   const classes = {
     REQUESTED: "status-requested",
     ACCEPTED: "status-accepted",
