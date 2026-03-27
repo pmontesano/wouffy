@@ -61,6 +61,7 @@ export default function CreateWalkerProfile() {
     } else {
       setFormData((prev) => ({ ...prev, display_name: user.name || '' }));
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const fetchUserProfile = async () => {

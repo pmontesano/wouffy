@@ -19,6 +19,7 @@ export default function MyPets() {
       return;
     }
     fetchPets();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const fetchPets = async () => {

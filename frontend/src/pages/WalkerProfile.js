@@ -18,6 +18,7 @@ export default function WalkerProfile() {
 
   useEffect(() => {
     fetchWalker();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
   const fetchWalker = async () => {

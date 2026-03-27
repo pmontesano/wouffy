@@ -53,7 +53,7 @@ export default function CreateWalkRequest() {
 
   const availableSlots = useMemo(
     () => getAvailableTimeSlots(formData.date, now, walkerRange),
-    [formData.date, scheduleTick, walkerRange],
+    [formData.date, now, walkerRange],
   );
 
   // true si el día seleccionado está en los días disponibles del walker

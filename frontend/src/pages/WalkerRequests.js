@@ -94,6 +94,7 @@ export default function WalkerRequests() {
       return;
     }
     checkProfile();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {

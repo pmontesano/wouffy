@@ -206,6 +206,7 @@ export default function MyWalks() {
       return;
     }
     fetchWalks();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Polling: refresca automáticamente para mostrar cambios del walker

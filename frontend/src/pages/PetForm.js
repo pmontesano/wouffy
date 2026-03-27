@@ -34,6 +34,7 @@ export default function PetForm() {
     if (isEdit) {
       fetchPet();
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [petId]);
 
   const fetchPet = async () => {
