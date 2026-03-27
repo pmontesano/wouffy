@@ -1,6 +1,6 @@
 {
-  "buildCommand": "yarn --cwd frontend run build",
+  "buildCommand": "cd frontend && yarn run build",
   "outputDirectory": "frontend/build",
-  "installCommand": "yarn --cwd frontend install",
+  "installCommand": "cd frontend && yarn install",
   "framework": null
 }
