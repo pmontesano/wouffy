@@ -157,7 +157,7 @@ export default function WalkLiveMap() {
       stopTracking();
       stopDemo();
     };
-  }, [fetchRoute, isOwner]);
+  }, [fetchRoute, isOwner, stopDemo, stopTracking]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Elapsed timer ─────────────────────────────────────────────────────────
   const startElapsed = () => {
