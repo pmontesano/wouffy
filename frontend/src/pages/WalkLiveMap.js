@@ -132,6 +132,23 @@ export default function WalkLiveMap() {
   const isWalker = user?.role === 'WALKER';
   const isOwner  = user?.role === 'OWNER';
 
+  // ── Elapsed timer ─────────────────────────────────────────────────────────
+  const startElapsed = () => {
+    elapsedRef.current = setInterval(() => setElapsed((s) => s + 1), 1000);
+  };
+  const stopTracking = useCallback(() => {
+    setTracking(false);
+    clearInterval(elapsedRef.current);
+    if (geoWatchRef.current != null) navigator.geolocation.clearWatch(geoWatchRef.current);
+    clearInterval(sendIntervalRef.current);
+  }, []);
+
+  const stopDemo = useCallback(() => {
+    setDemoRunning(false);
+    clearInterval(elapsedRef.current);
+    clearInterval(demoIntervalRef.current);
+  }, []);
+
   // ── Cargar walk + ruta al montar ──────────────────────────────────────────
   const fetchRoute = useCallback(async (silent = false) => {
     try {
@@ -158,14 +175,6 @@ export default function WalkLiveMap() {
       stopDemo();
     };
   }, [fetchRoute, isOwner, stopDemo, stopTracking]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  // ── Elapsed timer ─────────────────────────────────────────────────────────
-  const startElapsed = () => {
-    elapsedRef.current = setInterval(() => setElapsed((s) => s + 1), 1000);
-  };
-  const stopElapsed = () => {
-    clearInterval(elapsedRef.current);
-  };
 
   // ── Walker: enviar posición real ──────────────────────────────────────────
   const sendPosition = useCallback(async (lat, lng) => {
@@ -206,13 +215,6 @@ export default function WalkLiveMap() {
     }, SEND_INTERVAL);
   };
 
-  const stopTracking = useCallback(() => {
-    setTracking(false);
-    stopElapsed();
-    if (geoWatchRef.current != null) navigator.geolocation.clearWatch(geoWatchRef.current);
-    clearInterval(sendIntervalRef.current);
-  }, []);
-
   // ── Demo mode ─────────────────────────────────────────────────────────────
   const startDemo = () => {
     demoIndexRef.current = 0;
@@ -237,12 +239,6 @@ export default function WalkLiveMap() {
       catch { /* en demo no bloqueamos */ }
     }, DEMO_STEP_MS);
   };
-
-  const stopDemo = useCallback(() => {
-    setDemoRunning(false);
-    stopElapsed();
-    clearInterval(demoIntervalRef.current);
-  }, []);
 
   // ── Derivados ─────────────────────────────────────────────────────────────
   const currentPos = points.length > 0 ? points[points.length - 1] : null;
