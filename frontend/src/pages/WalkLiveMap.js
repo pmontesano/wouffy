@@ -206,12 +206,12 @@ export default function WalkLiveMap() {
     }, SEND_INTERVAL);
   };
 
-  const stopTracking = () => {
+  const stopTracking = useCallback(() => {
     setTracking(false);
     stopElapsed();
     if (geoWatchRef.current != null) navigator.geolocation.clearWatch(geoWatchRef.current);
     clearInterval(sendIntervalRef.current);
-  };
+  }, []);
 
   // ── Demo mode ─────────────────────────────────────────────────────────────
   const startDemo = () => {
@@ -238,11 +238,11 @@ export default function WalkLiveMap() {
     }, DEMO_STEP_MS);
   };
 
-  const stopDemo = () => {
+  const stopDemo = useCallback(() => {
     setDemoRunning(false);
     stopElapsed();
     clearInterval(demoIntervalRef.current);
-  };
+  }, []);
 
   // ── Derivados ─────────────────────────────────────────────────────────────
   const currentPos = points.length > 0 ? points[points.length - 1] : null;
