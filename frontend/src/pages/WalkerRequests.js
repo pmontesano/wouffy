@@ -11,6 +11,7 @@ import {
   XCircle,
   Edit,
   RefreshCw,
+  Map,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { toast } from "sonner";
@@ -398,6 +399,23 @@ function WalkCard({ item, index, onPatch, onAccept, onReject, muted = false }) {
             >
               Finalizar ✅
             </button>
+          )}
+          {/* Botón de mapa: en vivo durante el paseo, resumen al completar */}
+          {["WALKER_ON_THE_WAY", "ARRIVED", "IN_PROGRESS"].includes(walk.status) && (
+            <Link
+              to={`/walks/${walk.walk_id}/live`}
+              className="flex-1 lg:flex-none px-5 py-2 border border-[#88D8B0] text-[#2d7a55] rounded-full hover:bg-[#f0fdf6] transition-colors text-sm flex items-center justify-center gap-1"
+            >
+              <Map size={14} /> Mapa en vivo
+            </Link>
+          )}
+          {walk.status === "COMPLETED" && (
+            <Link
+              to={`/walks/${walk.walk_id}/summary`}
+              className="flex-1 lg:flex-none px-5 py-2 border border-gray-300 text-gray-600 rounded-full hover:bg-gray-50 transition-colors text-sm flex items-center justify-center gap-1"
+            >
+              <Map size={14} /> Ver ruta
+            </Link>
           )}
         </div>
       </div>

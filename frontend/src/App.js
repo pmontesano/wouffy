@@ -20,6 +20,8 @@ import CreateWalkerProfile from './pages/CreateWalkerProfile';
 import Account from './pages/Account';
 import MyPets from './pages/MyPets';
 import PetForm from './pages/PetForm';
+import WalkLiveMap from './pages/WalkLiveMap';
+import WalkSummary from './pages/WalkSummary';
 import { isOAuthReturnUrl } from './utils/authRedirect';
 
 function AppRouter() {
@@ -120,6 +122,22 @@ function AppRouter() {
           element={
             <ProtectedRoute requireRole="OWNER">
               <PetForm />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/walks/:walkId/live"
+          element={
+            <ProtectedRoute>
+              <WalkLiveMap />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/walks/:walkId/summary"
+          element={
+            <ProtectedRoute>
+              <WalkSummary />
             </ProtectedRoute>
           }
         />

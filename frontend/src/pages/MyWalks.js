@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import { api } from "../utils/api";
 import { useAuth } from "../context/AuthContext";
-import { useNavigate } from "react-router-dom";
-import { Calendar, Clock, MapPin, User, XCircle, Star, RefreshCw } from "lucide-react";
+import { useNavigate, Link } from "react-router-dom";
+import { Calendar, Clock, MapPin, User, XCircle, Star, RefreshCw, Map } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { toast } from "sonner";
 import {
@@ -458,6 +458,26 @@ function WalkCard({ item, index, ratedWalks, onCancel, onRate, muted = false }) 
               <XCircle size={15} />
               Cancelar
             </button>
+          )}
+
+          {/* Mapa en vivo durante el paseo */}
+          {["WALKER_ON_THE_WAY", "ARRIVED", "IN_PROGRESS"].includes(walk.status) && (
+            <Link
+              to={`/walks/${walk.walk_id}/live`}
+              className="px-4 py-2 border border-[#88D8B0] text-[#2d7a55] rounded-full hover:bg-[#f0fdf6] transition-colors flex items-center justify-center gap-2 text-sm font-semibold"
+            >
+              <Map size={14} /> Ver en vivo
+            </Link>
+          )}
+
+          {/* Ruta completa al finalizar */}
+          {isCompleted && (
+            <Link
+              to={`/walks/${walk.walk_id}/summary`}
+              className="px-4 py-2 border border-gray-200 text-gray-600 rounded-full hover:bg-gray-50 transition-colors flex items-center justify-center gap-2 text-sm"
+            >
+              <Map size={14} /> Ver ruta
+            </Link>
           )}
 
           {isCompleted && !alreadyRated && (

@@ -52,3 +52,6 @@ async def setup_indexes() -> None:
     # --- walk_ratings ---
     await db.walk_ratings.create_index([("walk_id", 1)], unique=True)
     await db.walk_ratings.create_index([("walker_id", 1)])
+
+    # --- walk_locations ---
+    await db.walk_locations.create_index([("walk_id", 1), ("recorded_at", 1)])

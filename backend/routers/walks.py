@@ -616,3 +616,127 @@ async def rate_walk(
 
     rating_doc["created_at"] = now
     return WalkRating(**rating_doc)
+
+
+# ---------------------------------------------------------------------------
+# GPS Tracking
+# ---------------------------------------------------------------------------
+
+# Estados en los que se acepta envío de ubicación
+_TRACKABLE_STATUSES = {
+    WalkStatus.WALKER_ON_THE_WAY.value,
+    WalkStatus.ARRIVED.value,
+    WalkStatus.IN_PROGRESS.value,
+}
+
+
+class LocationPoint(dict):
+    """Esquema simple — no necesita Pydantic porque no se expone como response_model."""
+
+
+from pydantic import BaseModel as _BM
+
+class LocationPayload(_BM):
+    latitude: float
+    longitude: float
+
+
+class RoutePoint(_BM):
+    latitude: float
+    longitude: float
+    recorded_at: str
+
+
+class RouteResponse(_BM):
+    walk_id: str
+    status: str
+    points: List[RoutePoint]
+    actual_start_at: Optional[str] = None
+    actual_end_at: Optional[str] = None
+
+
+@router.post("/{walk_id}/location", status_code=201)
+async def post_location(
+    walk_id: str,
+    payload: LocationPayload,
+    current_user: User = Depends(get_current_user),
+):
+    """
+    El walker envía su posición GPS actual durante el paseo.
+    Solo el walker asignado puede llamar este endpoint.
+    Solo se acepta cuando el paseo está en estado activo.
+    """
+    if current_user.role != UserRole.WALKER:
+        raise HTTPException(status_code=403, detail="Solo el paseador puede enviar su ubicación")
+
+    walker_profile = await _get_walker_profile_for_user(current_user.user_id)
+    if not walker_profile:
+        raise HTTPException(status_code=404, detail="Perfil de paseador no encontrado")
+
+    walk = await db.walks.find_one(
+        {"walk_id": walk_id, "walker_profile_id": walker_profile["walker_id"]}, {"_id": 0}
+    )
+    if not walk:
+        raise HTTPException(status_code=404, detail="Paseo no encontrado")
+
+    if walk["status"] not in _TRACKABLE_STATUSES:
+        raise HTTPException(
+            status_code=400,
+            detail=f"No se puede enviar ubicación en estado '{walk['status']}'",
+        )
+
+    now = datetime.now(timezone.utc)
+    point_doc = {
+        "walk_id": walk_id,
+        "latitude": payload.latitude,
+        "longitude": payload.longitude,
+        "recorded_at": now.isoformat(),
+    }
+    await db.walk_locations.insert_one(point_doc)
+
+    # Actualizar última posición conocida en el documento del walk (para acceso rápido)
+    await db.walks.update_one(
+        {"walk_id": walk_id},
+        {"$set": {
+            "last_lat": payload.latitude,
+            "last_lng": payload.longitude,
+            "last_location_at": now.isoformat(),
+        }},
+    )
+
+    return {"ok": True, "recorded_at": now.isoformat()}
+
+
+@router.get("/{walk_id}/route", response_model=RouteResponse)
+async def get_route(
+    walk_id: str,
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Devuelve todos los puntos GPS del paseo ordenados por tiempo.
+    Accesible tanto por el walker asignado como por el dueño del paseo.
+    """
+    role = current_user.role.value if current_user.role else ""
+    wp = None
+    if current_user.role == UserRole.WALKER:
+        prof = await _get_walker_profile_for_user(current_user.user_id)
+        wp = prof["walker_id"] if prof else None
+
+    walk = await get_walk_for_authenticated_user(
+        db, walk_id, user_id=current_user.user_id, role=role, walker_profile_id=wp
+    )
+    if not walk:
+        raise HTTPException(status_code=404, detail="Paseo no encontrado")
+
+    points_cursor = db.walk_locations.find(
+        {"walk_id": walk_id}, {"_id": 0, "latitude": 1, "longitude": 1, "recorded_at": 1}
+    ).sort("recorded_at", 1)
+    points_raw = await points_cursor.to_list(10000)
+
+    return RouteResponse(
+        walk_id=walk_id,
+        status=walk["status"],
+        actual_start_at=walk.get("actual_start_at"),
+        actual_end_at=walk.get("actual_end_at"),
+        points=[RoutePoint(**p) for p in points_raw],
+    )
