@@ -109,6 +109,11 @@ export default function WalkerRequests() {
     try {
       await api.patch(`/walks/${walkId}/${segment}`);
       toast.success(okMessage);
+      if (segment === "start") {
+        // Al iniciar el paseo, lleva directo al mapa en vivo
+        navigate(`/walks/${walkId}/live`);
+        return;
+      }
       // Actualiza inmediatamente sin esperar el próximo poll
       fetchWalks();
     } catch (error) {

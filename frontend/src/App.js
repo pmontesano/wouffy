@@ -23,6 +23,7 @@ import PetForm from './pages/PetForm';
 import WalkLiveMap from './pages/WalkLiveMap';
 import WalkSummary from './pages/WalkSummary';
 import { isOAuthReturnUrl } from './utils/authRedirect';
+import { WalkTrackingProvider } from './context/WalkTrackingContext';
 
 function AppRouter() {
   const location = useLocation();
@@ -149,12 +150,14 @@ function AppRouter() {
 function App() {
   return (
     <AuthProvider>
-      <div className="App">
-        <BrowserRouter>
-          <AppRouter />
-        </BrowserRouter>
-        <Toaster position="top-right" richColors />
-      </div>
+      <WalkTrackingProvider>
+        <div className="App">
+          <BrowserRouter>
+            <AppRouter />
+          </BrowserRouter>
+          <Toaster position="top-right" richColors />
+        </div>
+      </WalkTrackingProvider>
     </AuthProvider>
   );
 }
