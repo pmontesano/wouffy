@@ -1,6 +1,7 @@
 import React from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { useWalkTracking } from '../context/WalkTrackingContext';
 import { Menu, User, LogOut, Home, MapPin, Calendar, UserCircle } from 'lucide-react';
 
 export default function Navbar() {
@@ -8,6 +9,7 @@ export default function Navbar() {
   const navigate = useNavigate();
   const location = useLocation();
   const [mobileMenuOpen, setMobileMenuOpen] = React.useState(false);
+  const { isActive: gpsActive, walkId: trackingWalkId } = useWalkTracking();
 
   const handleLogout = async () => {
     await logout();
@@ -61,18 +63,29 @@ export default function Navbar() {
                   </>
                 )}
                 {user.role === 'WALKER' && (
-                  <Link
-                    to="/walker/requests"
-                    className={`flex items-center space-x-2 px-4 py-2 rounded-full transition-all ${
-                      isActive('/walker/requests')
-                        ? 'bg-[#88D8B0] text-white'
-                        : 'text-gray-700 hover:bg-gray-100'
-                    }`}
-                    data-testid="nav-walker-requests-link"
-                  >
-                    <Calendar size={18} />
-                    <span>Solicitudes</span>
-                  </Link>
+                  <>
+                    <Link
+                      to="/walker/requests"
+                      className={`flex items-center space-x-2 px-4 py-2 rounded-full transition-all ${
+                        isActive('/walker/requests')
+                          ? 'bg-[#88D8B0] text-white'
+                          : 'text-gray-700 hover:bg-gray-100'
+                      }`}
+                      data-testid="nav-walker-requests-link"
+                    >
+                      <Calendar size={18} />
+                      <span>Solicitudes</span>
+                    </Link>
+                    {gpsActive && trackingWalkId && (
+                      <Link
+                        to={`/walks/${trackingWalkId}/live`}
+                        className="flex items-center gap-1.5 px-3 py-1.5 bg-[#f0fdf6] border border-[#88D8B0] rounded-full text-xs font-semibold text-[#2d7a55] hover:bg-[#dcfbec] transition-colors"
+                      >
+                        <span className="inline-block w-2 h-2 rounded-full bg-[#88D8B0] animate-pulse" />
+                        GPS activo
+                      </Link>
+                    )}
+                  </>
                 )}
                 <Link
                   to="/app/account"
@@ -149,13 +162,25 @@ export default function Navbar() {
                   </>
                 )}
                 {user.role === 'WALKER' && (
-                  <Link
-                    to="/walker/requests"
-                    className="block px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-lg"
-                    onClick={() => setMobileMenuOpen(false)}
-                  >
-                    Solicitudes
-                  </Link>
+                  <>
+                    <Link
+                      to="/walker/requests"
+                      className="block px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-lg"
+                      onClick={() => setMobileMenuOpen(false)}
+                    >
+                      Solicitudes
+                    </Link>
+                    {gpsActive && trackingWalkId && (
+                      <Link
+                        to={`/walks/${trackingWalkId}/live`}
+                        className="flex items-center gap-2 px-4 py-2 text-[#2d7a55] font-semibold bg-[#f0fdf6] rounded-lg"
+                        onClick={() => setMobileMenuOpen(false)}
+                      >
+                        <span className="inline-block w-2 h-2 rounded-full bg-[#88D8B0] animate-pulse" />
+                        GPS activo — Ver mapa
+                      </Link>
+                    )}
+                  </>
                 )}
                 <Link
                   to="/app/account"
